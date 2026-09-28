@@ -98,21 +98,21 @@ export function playSfx(name: SfxName, combo = 1) {
     }
     if (name === "combo") {
       const root = 494 + Math.min(combo, 16) * 14
-      bell(root, now, 0.16, 0.06)
-      bell(root * 1.26, now + 0.07, 0.18, 0.065)
-      bell(root * 1.5, now + 0.14, 0.26, 0.07)
+      bell(root, now, 0.16, 0.18)
+      bell(root * 1.26, now + 0.07, 0.18, 0.19)
+      bell(root * 1.5, now + 0.14, 0.26, 0.2)
       return
     }
     if (name === "perfect") {
-      bell(659, now, 0.14, 0.055)
-      bell(880, now + 0.07, 0.2, 0.06)
+      bell(659, now, 0.14, 0.2)
+      bell(880, now + 0.07, 0.2, 0.22)
       return
     }
     if (name === "great") {
-      bell(784, now, 0.16, 0.05)
+      bell(784, now, 0.16, 0.2)
       return
     }
-    bell(659, now, 0.12, 0.04)
+    bell(659, now, 0.12, 0.17)
   }
 
   if (ctx.state === "suspended") {
