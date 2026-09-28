@@ -33,6 +33,7 @@ export function ListeningReading({ onBack, onReview }: Props) {
   async function search(value: string) {
     const term = value.trim()
     if (!term) return
+    setQuery(term)
     requestRef.current?.abort()
     const controller = new AbortController()
     requestRef.current = controller
@@ -122,6 +123,22 @@ export function ListeningReading({ onBack, onReview }: Props) {
           />
           <button type="submit" className="solid" disabled={!query.trim() || loading}>搜歌词</button>
         </form>
+      )}
+
+      {!selected && !searched && (
+        <div className="song-discovery">
+          <div>
+            <span className="plate-label">从一首熟悉的歌开始</span>
+            <strong>听过的旋律，<br />现在也能读出来。</strong>
+            <p>选一首歌，看歌词和粤拼；想记住时，切到抄写或练习。</p>
+          </div>
+          <div className="song-suggestions">
+            <span>试着搜索</span>
+            {["富士山下", "海阔天空", "喜帖街"].map((term) => (
+              <button type="button" key={term} onClick={() => void search(term)}>{term}<span aria-hidden="true">↗</span></button>
+            ))}
+          </div>
+        </div>
       )}
 
       {loading && <p className="lookup-note" role="status">正在读取…</p>}
