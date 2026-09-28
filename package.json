@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "msedge-tts": "^2.0.8",
+    "opencc-js": "^1.4.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "to-jyutping": "^3.1.1",

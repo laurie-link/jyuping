@@ -16,9 +16,10 @@ type Props = {
   onAgain: () => void
   onNext?: () => void
   onReview: () => void
+  homeLabel?: string
 }
 
-export function Summary({ data, onHome, onAgain, onNext, onReview }: Props) {
+export function Summary({ data, onHome, onAgain, onNext, onReview, homeLabel = "回首页" }: Props) {
   const due = dueCards(loadStore()).length
 
   return (
@@ -62,7 +63,7 @@ export function Summary({ data, onHome, onAgain, onNext, onReview }: Props) {
           </button>
         )}
         <button type="button" className="texty" onClick={onHome}>
-          回首页
+          {homeLabel}
         </button>
       </div>
     </div>

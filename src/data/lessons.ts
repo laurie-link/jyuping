@@ -1,20 +1,131 @@
+import { commonLessons } from "./common-words"
+import { commonThemes } from "./common-themes"
+import { confusableLessons } from "./confusable"
+import { spokenCharLessons } from "./spoken-chars"
 import { word } from "../lib/reading"
-import type { Lesson } from "../lib/types"
+import type { Lesson, Sentence } from "../lib/types"
 
-export const lessons: Lesson[] = [
+function item(id: string, text: string, gloss: string, note?: string): Sentence {
+  return { id, gloss, note, tokens: [word(text, gloss)] }
+}
+
+const soundLessons: Lesson[] = [
   {
-    id: "tones",
-    title: "六个声调",
-    blurb: "同一组声母韵母，靠末尾的数字把声调分开。",
+    id: "initials",
+    title: "声母",
+    blurb: "十九个声母，每个配一个例字。",
     sentences: [
-      { id: "si1", gloss: "诗", tokens: [word("詩", "诗")] },
-      { id: "si2", gloss: "史", tokens: [word("史", "史")] },
-      { id: "si3", gloss: "试", tokens: [word("試", "试")] },
-      { id: "si4", gloss: "时", tokens: [word("時", "时")] },
-      { id: "si5", gloss: "市", tokens: [word("市", "市")] },
-      { id: "si6", gloss: "是", tokens: [word("是", "是")] },
+      item("b", "巴", "声母 b"),
+      item("p", "怕", "声母 p"),
+      item("m", "媽", "声母 m"),
+      item("f", "花", "声母 f"),
+      item("d", "打", "声母 d"),
+      item("t", "他", "声母 t"),
+      item("n", "那", "声母 n"),
+      item("l", "啦", "声母 l"),
+      item("g", "家", "声母 g"),
+      item("k", "卡", "声母 k"),
+      item("ng", "牙", "声母 ng", "牙的声母是 ng，不是 n。"),
+      item("h", "蝦", "声母 h"),
+      item("gw", "瓜", "声母 gw", "瓜的声母是 gw，不是 g。"),
+      item("kw", "誇", "声母 kw", "誇的声母是 kw，不是 k。"),
+      item("w", "蛙", "声母 w"),
+      item("z", "渣", "声母 z"),
+      item("c", "叉", "声母 c"),
+      item("s", "沙", "声母 s"),
+      item("j", "也", "声母 j"),
     ],
   },
+  {
+    id: "finals",
+    title: "韵母",
+    blurb: "没有鼻音、没有入声的韵母。",
+    sentences: [
+      item("aa", "呀", "韵母 aa"),
+      item("e", "呢", "韵母 e", "单字呢是 ne1，韵母是 e。呢個是 ni1，呢度是 nei1。"),
+      item("i", "衣", "韵母 i"),
+      item("o", "柯", "韵母 o"),
+      item("u", "烏", "韵母 u", "乌要写成 wu1，声母 w 不能省。"),
+      item("oe", "靴", "韵母 oe"),
+      item("yu", "於", "韵母 yu", "於要写成 jyu1，声母 j 不能省。"),
+      item("aai", "街", "韵母 aai"),
+      item("aau", "拗", "韵母 aau"),
+      item("ai", "矮", "韵母 ai"),
+      item("au", "歐", "韵母 au"),
+      item("ei", "非", "韵母 ei"),
+      item("oi", "哀", "韵母 oi"),
+      item("ou", "澳", "韵母 ou"),
+      item("eoi", "需", "韵母 eoi"),
+      item("ui", "杯", "韵母 ui"),
+      item("iu", "腰", "韵母 iu"),
+    ],
+  },
+  {
+    id: "nasals",
+    title: "鼻音韵",
+    blurb: "韵尾是 m、n、ng。短 a 和长 aa 要分开。",
+    sentences: [
+      item("aam", "三", "韵母 aam"),
+      item("aan", "山", "韵母 aan"),
+      item("aang", "生", "韵母 aang"),
+      item("am", "心", "韵母 am", "心是 sam1，韵母 am。三是 saam1，韵母 aam。"),
+      item("an", "新", "韵母 an"),
+      item("ang", "燈", "韵母 ang"),
+      item("eng", "聽", "韵母 eng", "单字听是 teng1。听日、听朝里的听是 ting1。"),
+      item("im", "點", "韵母 im"),
+      item("in", "先", "韵母 in"),
+      item("ing", "星", "韵母 ing"),
+      item("on", "安", "韵母 on"),
+      item("ong", "方", "韵母 ong"),
+      item("un", "碗", "韵母 un"),
+      item("ung", "風", "韵母 ung"),
+      item("eon", "春", "韵母 eon"),
+      item("oeng", "香", "韵母 oeng"),
+      item("yun", "冤", "韵母 yun"),
+      item("syllabic-m", "唔", "韵母 m"),
+      item("syllabic-ng", "吳", "韵母 ng"),
+    ],
+  },
+  {
+    id: "checked",
+    title: "入声韵",
+    blurb: "韵尾是 p、t、k。声调只有 1、3、6。",
+    sentences: [
+      item("aap", "鴨", "韵母 aap"),
+      item("aat", "八", "韵母 aat"),
+      item("aak", "百", "韵母 aak"),
+      item("ap", "急", "韵母 ap"),
+      item("at", "七", "韵母 at", "七是 cat1，韵母 at。八是 baat3，韵母 aat。"),
+      item("ak", "北", "韵母 ak"),
+      item("ek", "石", "韵母 ek"),
+      item("ip", "葉", "韵母 ip"),
+      item("it", "熱", "韵母 it"),
+      item("ik", "色", "韵母 ik"),
+      item("ot", "渴", "韵母 ot"),
+      item("ok", "學", "韵母 ok"),
+      item("ut", "活", "韵母 ut"),
+      item("uk", "屋", "韵母 uk"),
+      item("eot", "出", "韵母 eot"),
+      item("oek", "腳", "韵母 oek"),
+      item("yut", "月", "韵母 yut"),
+    ],
+  },
+  {
+    id: "tones",
+    title: "声调",
+    blurb: "诗史试时市是，同一组声母韵母，靠末尾的数字分开。",
+    sentences: [
+      item("si1", "詩", "诗"),
+      item("si2", "史", "史"),
+      item("si3", "試", "试"),
+      item("si4", "時", "时"),
+      item("si5", "市", "市"),
+      item("si6", "是", "是"),
+    ],
+  },
+]
+
+const starterLessons: Lesson[] = [
   {
     id: "hello",
     title: "打招呼",
@@ -304,6 +415,45 @@ export const lessons: Lesson[] = [
     ],
   },
 ]
+
+export const sections: Array<{ id: string; title: string; blurb: string; lessons: Lesson[] }> = [
+  {
+    id: "sound",
+    title: "声母韵母声调",
+    blurb: "先把声母、韵母和声调练熟。",
+    lessons: soundLessons,
+  },
+  {
+    id: "starter",
+    title: "入门必学",
+    blurb: "见面、吃饭、问路这些日常说法。",
+    lessons: starterLessons,
+  },
+  {
+    id: "spoken",
+    title: "粤语口语常用字",
+    blurb: "说话里最常见的单字，按用法分成小课。",
+    lessons: spokenCharLessons,
+  },
+  {
+    id: "common",
+    title: "常用三千词",
+    blurb: "按出现次数排，也可以按题目再看。",
+    lessons: commonLessons,
+  },
+  {
+    id: "confusable",
+    title: "易混读音",
+    blurb: "容易写错的几组读音，一组一组对着打。",
+    lessons: confusableLessons,
+  },
+]
+
+export const lessons: Lesson[] = sections.flatMap((section) =>
+  section.id === "common"
+    ? [...section.lessons, ...commonThemes.flatMap((theme) => theme.lessons)]
+    : section.lessons,
+)
 
 export function getLesson(id: string): Lesson | undefined {
   return lessons.find((lesson) => lesson.id === id)

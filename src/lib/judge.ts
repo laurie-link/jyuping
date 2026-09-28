@@ -34,6 +34,13 @@ export function draftStatus(raw: string, expected: string[]): "incomplete" | "fi
   return "filled"
 }
 
+/** Empty slot means incomplete. Anything in every slot can be judged. Nothing here checks tones while typing. */
+export function slotsStatus(slots: string[], expected: string[]): "incomplete" | "filled" | "match" {
+  if (slots.length !== expected.length || slots.some((part) => part.length === 0)) return "incomplete"
+  if (slots.every((part, index) => part === expected[index])) return "match"
+  return "filled"
+}
+
 /** Consume a typed draft against the remaining expected syllables. */
 export function takeDraft(raw: string, expected: string[]): DraftResult {
   let rest = cleanDraft(raw)
