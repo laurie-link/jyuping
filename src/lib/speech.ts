@@ -1,36 +1,19 @@
-let audio: AudioContext | null = null
+import { sharedAudio } from "./sfx"
 
-export function playCue(kind: "ok" | "bad" | "combo") {
-  const Ctx = window.AudioContext
-  if (!Ctx) return
-  if (!audio) audio = new Ctx()
-  if (audio.state === "suspended") void audio.resume()
+let playback: AudioBufferSourceNode | null = null
+let requestId = 0
 
-  const now = audio.currentTime
-  const osc = audio.createOscillator()
-  const gain = audio.createGain()
-  osc.type = "sine"
-  osc.frequency.value = kind === "bad" ? 180 : kind === "combo" ? 740 : 520
-  gain.gain.setValueAtTime(0.0001, now)
-  gain.gain.exponentialRampToValueAtTime(0.045, now + 0.012)
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === "combo" ? 0.18 : 0.1))
-  osc.connect(gain).connect(audio.destination)
-  osc.start(now)
-  osc.stop(now + 0.2)
-}
-
-function cantoneseVoice(): SpeechSynthesisVoice | undefined {
+function browserVoice(): SpeechSynthesisVoice | undefined {
   return speechSynthesis.getVoices().find((item) => {
     const lang = item.lang.toLowerCase().replaceAll("_", "-")
     return lang.startsWith("zh-hk") || /cantonese|粤语|粵語/i.test(item.name)
   })
 }
 
-export function speakCantonese(text: string) {
-  if (!("speechSynthesis" in window) || !text) return
-
+function speakWithBrowser(text: string) {
+  if (!("speechSynthesis" in window)) return
   const speak = () => {
-    const voice = cantoneseVoice()
+    const voice = browserVoice()
     if (!voice) return
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = "zh-HK"
@@ -39,10 +22,48 @@ export function speakCantonese(text: string) {
     speechSynthesis.cancel()
     speechSynthesis.speak(utterance)
   }
-
   if (speechSynthesis.getVoices().length === 0) {
     speechSynthesis.addEventListener("voiceschanged", speak, { once: true })
     return
   }
   speak()
+}
+
+/** Microsoft Edge 晓佳，zh-HK-HiuGaaiNeural. Falls back to the browser voice. */
+export async function speakCantonese(text: string) {
+  const line = text.trim()
+  if (!line) return
+  const id = ++requestId
+  if ("speechSynthesis" in window) speechSynthesis.cancel()
+  if (playback) {
+    try {
+      playback.stop()
+    } catch {
+      // already finished
+    }
+    playback = null
+  }
+
+  try {
+    const response = await fetch(`/api/tts?text=${encodeURIComponent(line)}`)
+    if (!response.ok) throw new Error(String(response.status))
+    if (id !== requestId) return
+    const bytes = await response.arrayBuffer()
+    if (id !== requestId) return
+    const ctx = sharedAudio()
+    if (ctx.state === "suspended") await ctx.resume()
+    if (id !== requestId) return
+    const buffer = await ctx.decodeAudioData(bytes.slice(0))
+    if (id !== requestId) return
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    playback = source
+    source.onended = () => {
+      if (playback === source) playback = null
+    }
+    source.start()
+  } catch {
+    if (id === requestId) speakWithBrowser(line)
+  }
 }

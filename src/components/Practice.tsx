@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { getLesson, nextLessonId } from "../data/lessons"
-import { takeDraft } from "../lib/judge"
+import { draftStatus, splitSyllables } from "../lib/judge"
 import { pointsFor, sessionRating, worseGrade } from "../lib/score"
-import { playCue, speakCantonese } from "../lib/speech"
+import { playSfx, primeAudio } from "../lib/sfx"
+import { speakCantonese } from "../lib/speech"
 import { buildSteps, stepExpected, stepsFromCards } from "../lib/steps"
 import {
   applyGrades,
@@ -40,8 +41,7 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
   })
   const [difficulty] = useState(() => loadStore().settings.difficulty)
   const [index, setIndex] = useState(0)
-  const [phase, setPhase] = useState<"typing" | "feedback">("typing")
-  const [doneCount, setDoneCount] = useState(0)
+  const [phase, setPhase] = useState<"typing" | "retype" | "feedback">("typing")
   const [draft, setDraft] = useState("")
   const [message, setMessage] = useState("")
   const [combo, setCombo] = useState(0)
@@ -68,13 +68,27 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
   phaseRef.current = phase
 
   useEffect(() => {
-    if (phase === "typing") inputRef.current?.focus()
-  }, [index, phase, doneCount])
+    if (phase === "typing" || phase === "retype") inputRef.current?.focus()
+  }, [index, phase])
 
   useEffect(() => {
     if (phase !== "typing" || !step) return
     if (!loadStore().settings.autoPlay) return
-    speakCantonese(step.promptParts.map((part) => part.char).join(""))
+    const text = step.promptParts.map((part) => part.char).join("")
+    const timer = window.setTimeout(() => {
+      void speakCantonese(text)
+    }, 40)
+    return () => window.clearTimeout(timer)
+  }, [index, phase, step])
+
+  useEffect(() => {
+    if ((phase !== "feedback" && phase !== "retype") || !step) return
+    if (!loadStore().settings.speakOnAnswer) return
+    const text = step.promptParts.map((part) => part.char).join("")
+    const timer = window.setTimeout(() => {
+      void speakCantonese(text)
+    }, 220)
+    return () => window.clearTimeout(timer)
   }, [index, phase, step])
 
   useEffect(() => {
@@ -116,10 +130,12 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
     if (phaseRef.current !== "typing" || !step) return
     const gradeName: GradeName =
       kind === "miss" ? "miss" : mistakesRef.current ? "hard" : editedRef.current ? "great" : "perfect"
-    phaseRef.current = "feedback"
-    setPhase("feedback")
+    const nextPhase = kind === "miss" ? "retype" : "feedback"
+    phaseRef.current = nextPhase
+    setPhase(nextPhase)
     setGrade(gradeName)
     setDraft("")
+    setMessage(kind === "miss" ? "照着再打一遍，对了才能往下" : "")
 
     const nextCounts = { ...countsRef.current, [gradeName]: countsRef.current[gradeName] + 1 }
     countsRef.current = nextCounts
@@ -139,43 +155,59 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
     }
     remember(step, gradeName)
     if (loadStore().settings.sound) {
-      playCue(gradeName === "miss" ? "bad" : nextCombo >= 3 ? "combo" : "ok")
+      if (gradeName === "miss") playSfx("wrong")
+      else if (nextCombo >= 3) playSfx("combo", nextCombo)
+      else playSfx(gradeName)
     }
   }
 
   function onValue(value: string) {
-    if (phaseRef.current !== "typing" || !step) return
-    const expected = stepExpected(step).slice(doneCount)
-    const result = takeDraft(value, expected)
-    const nextDone = doneCount + result.lockedDelta
-    setDoneCount(nextDone)
-    setDraft(result.draft)
+    if ((phaseRef.current !== "typing" && phaseRef.current !== "retype") || !step) return
+    const previous = draft.replace(/[^a-z1-6]/gi, "")
+    const incoming = value.toLowerCase().replace(/[^a-z1-6]/g, "")
+    if (incoming.length > previous.length && loadStore().settings.sound) playSfx("key")
+    setDraft(incoming)
+    setShake(false)
+    if (draftStatus(incoming, stepExpected(step)) === "incomplete") {
+      setMessage(phaseRef.current === "retype" ? "照着再打一遍，对了才能往下" : "")
+    } else setMessage("按 Enter 确认")
+  }
 
-    if (result.toneExpected) {
-      editedRef.current = true
-      mistakesRef.current = true
-      setMessage(`声调不对，是 ${result.toneExpected}`)
+  function confirmAnswer() {
+    if (phaseRef.current !== "typing" || !step) return
+    const status = draftStatus(draft, stepExpected(step))
+    if (status === "incomplete") {
+      setMessage("先打完，再按 Enter 确认")
       setShake(true)
-      if (loadStore().settings.sound) playCue("bad")
       return
     }
-    if (result.wrongGot) {
+    if (status !== "match") {
       editedRef.current = true
       mistakesRef.current = true
-      setMessage("还不对，再打一次")
+      setMessage("不对，改完再按 Enter")
       setShake(true)
-      if (loadStore().settings.sound) playCue("bad")
+      if (loadStore().settings.sound) playSfx("wrong")
       return
     }
-    if (result.lockedDelta > 0) setMessage("")
-    if (
-      nextDone === step.promptParts.length &&
-      result.draft === "" &&
-      !result.toneExpected &&
-      !result.wrongGot
-    ) {
-      finish("success")
+    finish("success")
+  }
+
+  function confirmRetype() {
+    if (phaseRef.current !== "retype" || !step) return
+    const status = draftStatus(draft, stepExpected(step))
+    if (status === "incomplete") {
+      setMessage("先打完，对了才能往下")
+      setShake(true)
+      return
     }
+    if (status !== "match") {
+      setMessage("不对，照着答案再打一遍")
+      setShake(true)
+      if (loadStore().settings.sound) playSfx("wrong")
+      return
+    }
+    if (loadStore().settings.sound) playSfx("great")
+    goNext()
   }
 
   function goNext() {
@@ -208,7 +240,6 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
     phaseRef.current = "typing"
     setIndex((value) => value + 1)
     setPhase("typing")
-    setDoneCount(0)
     setDraft("")
     setMessage("")
     setGrade(null)
@@ -231,6 +262,10 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
       } else if (event.key === "Enter" && phaseRef.current === "feedback") {
         event.preventDefault()
         goNext()
+      } else if (event.key === "Enter" && phaseRef.current === "retype") {
+        if (event.target instanceof HTMLInputElement) return
+        event.preventDefault()
+        confirmRetype()
       }
     }
     window.addEventListener("keydown", onKey)
@@ -241,8 +276,8 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
     const upcoming = nextDue(loadStore())
     return (
       <div className="stage empty-stage">
-        <button type="button" className="texty" onClick={onExit}>
-          回首页
+        <button type="button" className="back" onClick={onExit}>
+          返回主菜单
         </button>
         <h1>{mode === "review" ? "这会儿没有到期的" : "这课还没准备好"}</h1>
         <p className="lede">
@@ -256,13 +291,21 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
 
   const prompt = step.promptParts.map((part) => part.char).join("")
   const showContext = step.contextEnd - step.contextStart < Array.from(step.contextChars).length
-  const locked = step.promptParts.slice(0, doneCount)
+  const typedSlots = splitSyllables(draft)
+  const slotCount = Math.max(step.promptParts.length, typedSlots.length)
+  const lastSlot = typedSlots[typedSlots.length - 1] ?? ""
+  const activeSlot =
+    typedSlots.length === 0
+      ? 0
+      : /[1-6]$/.test(lastSlot)
+        ? Math.min(typedSlots.length, slotCount - 1)
+        : typedSlots.length - 1
 
   return (
     <div className="stage">
       <header className="stage-bar">
-        <button type="button" className="texty" onClick={leave}>
-          粤拼记
+        <button type="button" className="back" onClick={leave}>
+          返回主菜单
         </button>
         <div className="stage-title">
           <strong>{mode === "review" ? "今日复习" : lesson?.title}</strong>
@@ -280,7 +323,7 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
         <span style={{ width: `${((index + (phase === "feedback" ? 1 : 0)) / steps.length) * 100}%` }} />
       </div>
 
-      <div className="play">
+      <div className={phase === "retype" ? "play retype" : "play"}>
         {burst && <div className="burst">{burst}</div>}
         {showContext && (
           <p className="context" aria-hidden="true">
@@ -295,7 +338,7 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
           </p>
         )}
 
-        {phase === "feedback" ? (
+        {phase === "feedback" || phase === "retype" ? (
           <div className="ruby-row">
             {step.promptParts.map((part, partIndex) => (
               <span className="ruby" key={`${part.jyutping}-${partIndex}`}>
@@ -310,32 +353,38 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
         )}
 
         <p className="gloss">{step.gloss}</p>
-        {phase === "feedback" && step.note && <p className="note">{step.note}</p>}
-        <p className="message" role="status">
+        {(phase === "feedback" || phase === "retype") && step.note && <p className="note">{step.note}</p>}
+        <p className={message === "按 Enter 确认" ? "message hint" : "message"} role="status">
           {ime ? "请切换到英文输入法" : message}
-          {phase === "feedback" && grade === "miss" ? " 先看清楚再往下。" : ""}
           {phase === "feedback" && grade === "perfect" ? " Perfect" : ""}
           {phase === "feedback" && grade === "great" ? " Great" : ""}
           {phase === "feedback" && grade === "hard" ? " 声调或拼写改对了" : ""}
         </p>
 
-        {phase === "typing" && (
-          <div className="entry" onClick={() => inputRef.current?.focus()}>
-            {locked.map((part, partIndex) => (
-              <span className="chip" data-tone={toneNumber(part.jyutping)} key={`${part.jyutping}-${partIndex}`}>
-                {part.jyutping}
-              </span>
-            ))}
+        {(phase === "typing" || phase === "retype") && (
+          <div className={shake ? "slots shake" : "slots"} onClick={() => inputRef.current?.focus()}>
+            {Array.from({ length: slotCount }, (_, slotIndex) => {
+              const value = typedSlots[slotIndex] ?? ""
+              const active = slotIndex === activeSlot
+              return (
+                <span className={active ? "slot on" : "slot"} key={slotIndex}>
+                  <b>
+                    {value}
+                    {active ? <i className="caret" /> : null}
+                  </b>
+                  <i className="rule" />
+                </span>
+              )
+            })}
             <input
               ref={inputRef}
-              className={shake ? "shake" : ""}
               value={draft}
               aria-label="粤拼输入"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
               lang="en"
-              placeholder={locked.length === 0 ? "打粤拼，声调打 1 到 6" : ""}
+              onPointerDown={primeAudio}
               onChange={(event) => {
                 if (!composingRef.current) onValue(event.target.value)
               }}
@@ -349,15 +398,15 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
                 onValue(event.currentTarget.value)
               }}
               onKeyDown={(event) => {
-                if (event.key === "Backspace" && draft === "" && doneCount > 0) {
-                  event.preventDefault()
+                primeAudio()
+                if (event.key === "Backspace" && draft.length > 0) {
                   editedRef.current = true
-                  setDoneCount((count) => count - 1)
+                  if (loadStore().settings.sound) playSfx("key")
                 } else if (event.key === "Enter") {
                   event.preventDefault()
                   event.stopPropagation()
-                  if (doneCount === step.promptParts.length && cleanEnough(draft)) finish("success")
-                  else finish("miss")
+                  if (phaseRef.current === "retype") confirmRetype()
+                  else confirmAnswer()
                 }
               }}
             />
@@ -371,12 +420,24 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
           <kbd>'</kbd>
           读出来
         </button>
-        {phase === "typing" ? (
-          <button type="button" onClick={() => finish("miss")}>
-            <kbd>Ctrl</kbd>
-            <kbd>;</kbd>
-            显示答案
-          </button>
+        {phase === "typing" || phase === "retype" ? (
+          <>
+            <button
+              type="button"
+              className="solid"
+              onClick={phase === "retype" ? confirmRetype : confirmAnswer}
+            >
+              <kbd>Enter</kbd>
+              {phase === "retype" ? (index + 1 >= steps.length ? "看结果" : "下一题") : "确认"}
+            </button>
+            {phase === "typing" && (
+              <button type="button" onClick={() => finish("miss")}>
+                <kbd>Ctrl</kbd>
+                <kbd>;</kbd>
+                显示答案
+              </button>
+            )}
+          </>
         ) : (
           <button type="button" className="solid" onClick={goNext}>
             <kbd>Enter</kbd>
@@ -387,8 +448,4 @@ export function Practice({ mode, lessonId, onExit, onDone }: Props) {
       </footer>
     </div>
   )
-}
-
-function cleanEnough(draft: string): boolean {
-  return draft.replace(/[^a-z1-6]/gi, "") === ""
 }

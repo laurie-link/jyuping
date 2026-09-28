@@ -105,6 +105,19 @@ export function Home({ onStartLesson, onStartReview }: Props) {
           <label>
             <input
               type="checkbox"
+              checked={store.settings.speakOnAnswer}
+              onChange={(event) =>
+                commit({
+                  ...store,
+                  settings: { ...store.settings, speakOnAnswer: event.target.checked },
+                })
+              }
+            />
+            显示答案时朗读
+          </label>
+          <label>
+            <input
+              type="checkbox"
               checked={store.settings.autoPlay}
               onChange={(event) =>
                 commit({
@@ -113,7 +126,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
                 })
               }
             />
-            出声提示
+            出题时朗读
           </label>
         </div>
       </section>
@@ -183,7 +196,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
             <p className="eyebrow">怎么用</p>
             <h2 id="intro-title">先打字，再记住。</h2>
             <ol>
-              <li>看繁体字，打粤拼。声调用数字，打完数字就跳到下一节。</li>
+              <li>看繁体字，把整题粤拼打完。按 Enter 才判断对错，打到一半不会提前说你对了。</li>
               <li>初级会把句子拆开，同一个词会反复出现，直到整句能一次打完。</li>
               <li>练完会按你答得稳不稳，安排下一次复习。不用自己记日子。</li>
             </ol>

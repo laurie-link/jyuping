@@ -198,6 +198,14 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
   flex-direction: column;
   padding: 22px 0 28px;
 }
+.back {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+.back:hover { filter: brightness(1.08); }
 .stage-score { display: flex; gap: 12px; align-items: baseline; font-family: var(--mono); }
 .stage-score b { color: var(--gold); font-size: 22px; }
 .stage-score em { color: var(--cinnabar); font-style: normal; }
@@ -226,41 +234,67 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
 .note { margin: 8px 0 0; color: var(--gold); }
 .message { min-height: 1.4em; color: var(--cinnabar); }
 
+.play.retype .ruby b { font-size: clamp(48px, 7vw, 80px); }
+.play.retype .slots { margin-top: 22px; }
 .ruby-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
 .ruby { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ruby b { font-family: var(--serif); font-size: clamp(56px, 8vw, 92px); font-weight: 560; line-height: 1; }
 .ruby code { font-family: var(--mono); font-size: 20px; }
 .ruby small { color: var(--muted); }
 
-.entry {
-  margin-top: 22px;
-  min-height: 64px;
-  min-width: min(560px, 100%);
+.slots {
+  position: relative;
+  margin-top: 36px;
+  min-height: 84px;
   display: flex;
-  gap: 8px;
+  gap: 28px;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 8px;
 }
-.chip {
-  font-family: var(--mono);
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  padding: 4px 10px;
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgba(246, 241, 231, 0.78);
 }
-.entry input {
-  width: min(280px, 70vw);
-  background: transparent;
+.slot b {
+  min-width: 1.2em;
+  min-height: 1em;
+  font-size: clamp(36px, 5vw, 52px);
+  font-weight: 560;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.slot .rule {
+  display: block;
+  width: 100%;
+  min-width: 1.5em;
+  border-bottom: 3px solid rgba(246, 241, 231, 0.28);
+}
+.slot.on { color: var(--gold); }
+.slot.on .rule { border-bottom-color: var(--gold); }
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.82em;
+  margin-left: 2px;
+  background: var(--gold);
+  vertical-align: -0.05em;
+  animation: blink 1s steps(1) infinite;
+}
+.slots input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   border: 0;
-  outline: none;
-  text-align: center;
-  font-family: var(--mono);
-  font-size: 28px;
-  padding: 8px 0;
+  padding: 0;
+  caret-color: transparent;
 }
-.entry input::placeholder { color: rgba(168, 155, 140, 0.7); font-size: 16px; }
+.message.hint { color: var(--muted); }
 .shake { animation: shake 0.35s linear; }
 
 .burst {
@@ -324,6 +358,9 @@ kbd {
   40% { transform: translateX(4px); }
   60% { transform: translateX(-3px); }
   80% { transform: translateX(2px); }
+}
+@keyframes blink {
+  50% { opacity: 0; }
 }
 @keyframes pop {
   0% { opacity: 0; transform: translateY(8px) scale(0.96); }

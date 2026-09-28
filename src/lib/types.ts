@@ -78,6 +78,7 @@ export type Store = {
     difficulty: Difficulty
     sound: boolean
     autoPlay: boolean
+    speakOnAnswer: boolean
   }
   seenIntro: boolean
 }

@@ -11,7 +11,7 @@ function emptyStore(): Store {
     cards: {},
     lessons: {},
     streak: { lastDay: "", count: 0 },
-    settings: { difficulty: "beginner", sound: true, autoPlay: false },
+    settings: { difficulty: "beginner", sound: true, autoPlay: false, speakOnAnswer: true },
     seenIntro: false,
   }
 }
