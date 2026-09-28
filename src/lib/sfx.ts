@@ -92,8 +92,8 @@ export function playSfx(name: SfxName, combo = 1) {
       return
     }
     if (name === "wrong") {
-      bell(311, now, 0.12, 0.16)
-      bell(196, now + 0.07, 0.19, 0.14)
+      bell(392, now, 0.17, 0.36)
+      bell(262, now + 0.09, 0.25, 0.32)
       return
     }
     if (name === "combo") {

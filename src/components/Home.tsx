@@ -6,9 +6,7 @@ import { ListeningReading } from "./ListeningReading"
 import { buildSteps } from "../lib/steps"
 import {
   dueCards,
-  formatDue,
   loadStore,
-  nextDue,
   saveStore,
   setDifficulty,
 } from "../lib/storage"
@@ -45,7 +43,6 @@ export function Home({ onStartLesson, onStartReview }: Props) {
   const [tool, setTool] = useState<null | "lookup" | "lyrics">(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const due = dueCards(store)
-  const upcoming = nextDue(store)
   const difficulty = store.settings.difficulty
   const section = sections.find((item) => item.id === sectionId)
   const bandSize = 25
@@ -140,35 +137,6 @@ export function Home({ onStartLesson, onStartReview }: Props) {
           </button>
         </div>
       </header>
-
-      {!section && tool === null && (
-        <section className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">粤语学习 · 每天一点</p>
-            <h1>一句一句<span>长出来。</span></h1>
-            <p className="lede">
-              看着粤语，把粤拼打出来。从一个字到一整句，把听过的声音慢慢记在手上。
-            </p>
-            <div className="hero-actions">
-              <button type="button" className="solid" onClick={() => onStartLesson("hello")}>开始练习 <span aria-hidden="true">↗</span></button>
-              <button type="button" className="ghost" onClick={() => setTool("lyrics")}>去听读 <span aria-hidden="true">→</span></button>
-            </div>
-            <p className="hero-progress">
-              <span>{store.streak.count > 0 ? `连续 ${store.streak.count} 天` : "今天就可以开始"}</span>
-              <span>{upcoming && due.length === 0 ? `下一轮 ${formatDue(upcoming.due)}` : `${due.length} 张待复习`}</span>
-            </p>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <span className="hero-art-ring" />
-            <span className="hero-art-mark">粵</span>
-            <div className="hero-art-word">
-              <ruby>你<rt>nei5</rt></ruby><ruby>好<rt>hou2</rt></ruby>
-            </div>
-            <span className="hero-art-caption">从声音，走到文字。</span>
-            <span className="hero-art-index">01 / 06</span>
-          </div>
-        </section>
-      )}
 
       {settingsOpen && (
         <section className="panel">

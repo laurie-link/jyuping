@@ -40,7 +40,7 @@ function scheduleDeletion(file: string, delay: number, mtimeMs: number) {
   expiryTimers.set(file, timer)
 }
 
-async function sweepCache() {
+export async function sweepCache() {
   let names: string[]
   try {
     names = await readdir(cacheDir)
@@ -104,7 +104,7 @@ async function fetchAudio(text: string): Promise<Buffer> {
   }
 }
 
-function synthesize(text: string): Promise<Buffer> {
+export function synthesize(text: string): Promise<Buffer> {
   const run = async () => {
     const cached = await readCache(text)
     if (cached) return cached
