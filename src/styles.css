@@ -551,7 +551,6 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
   color: var(--muted);
 }
 .keys .solid { background: var(--gold); border-color: var(--gold); color: #2a2112; }
-.keys p { flex-basis: 100%; margin: 2px 0 0; text-align: center; font-size: 12px; }
 kbd {
   border: 1px solid var(--line);
   border-bottom-width: 2px;

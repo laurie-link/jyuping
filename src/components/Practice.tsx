@@ -698,7 +698,6 @@ export function Practice({
             {index + 1 >= steps.length ? "看结果" : "下一题"}
           </button>
         )}
-        <p>1 阴平 · 2 阴上 · 3 阴去 · 4 阳平 · 5 阳上 · 6 阳去</p>
       </footer>
     </div>
   )
