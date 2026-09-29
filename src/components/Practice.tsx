@@ -53,6 +53,10 @@ function nonJyutping(value: string): boolean {
   return /[^a-z1-6\s]/i.test(value)
 }
 
+function isSpaceText(value: string | null | undefined): boolean {
+  return !!value && /^[\s\u00a0\u3000]+$/.test(value)
+}
+
 export function Practice({
   mode,
   lessonId,
@@ -113,6 +117,7 @@ export function Practice({
   const composingRef = useRef(false)
   const handledKeyRef = useRef(false)
   const ignoreCompositionRef = useRef(false)
+  const spaceGuardRef = useRef(false)
   const releaseTimerRef = useRef(0)
   const lastReleaseAtRef = useRef(0)
   const step = steps[index]
@@ -358,6 +363,20 @@ export function Practice({
     }
     if (loadStore().settings.sound) playSfx("great")
     goNext()
+  }
+
+  // Phone keyboards often omit key " " and only insert a space, or report keyCode 229.
+  function acceptSpace() {
+    if (spaceGuardRef.current) return
+    if (phaseRef.current !== "typing" && phaseRef.current !== "retype") return
+    spaceGuardRef.current = true
+    cancelRelease()
+    composingRef.current = false
+    setIme(false)
+    onSpace()
+    window.setTimeout(() => {
+      spaceGuardRef.current = false
+    }, 40)
   }
 
   function onSpace() {
@@ -665,9 +684,25 @@ export function Practice({
                 setIme(false)
                 onSlotValue(typed)
               }}
+              onBeforeInput={(event) => {
+                const native = event.nativeEvent
+                if (native.inputType !== "insertText" && native.inputType !== "insertReplacementText" && native.inputType !== "insertCompositionText") return
+                if (!isSpaceText(native.data)) return
+                event.preventDefault()
+                acceptSpace()
+              }}
               onChange={(event) => {
                 if (handledKeyRef.current) return
                 const value = event.target.value
+                if (/[\s\u00a0\u3000]/.test(value)) {
+                  const stripped = value.replace(/[\s\u00a0\u3000]+/g, "")
+                  if (!nonJyutping(stripped)) {
+                    event.target.value = stripped
+                    if (stripped !== slotText()) onSlotValue(stripped)
+                    acceptSpace()
+                    return
+                  }
+                }
                 if (nonJyutping(value)) {
                   cancelRelease()
                   event.target.value = compositionBaseRef.current
@@ -683,6 +718,12 @@ export function Practice({
               }}
               onKeyDown={(event) => {
                 primeAudio()
+                if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key === " " || event.key === "Spacebar" || event.code === "Space")) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  acceptSpace()
+                  return
+                }
                 if (swallowedByIme(event)) {
                   if (!composingRef.current) compositionBaseRef.current = slotText()
                   composingRef.current = true
@@ -707,12 +748,7 @@ export function Practice({
                   return
                 }
                 if (latin) setIme(false)
-                if (event.key === " " && event.keyCode !== 229) {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  composingRef.current = false
-                  onSpace()
-                } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
                   event.preventDefault()
                   composingRef.current = false
                   const list = slotsRef.current
@@ -741,11 +777,19 @@ export function Practice({
       </div>
 
       <footer className="keys">
-        <button type="button" onClick={() => speakCantonese(prompt)}>
-          <kbd>Ctrl</kbd>
-          <kbd>'</kbd>
-          读出来
-        </button>
+        {phase === "typing" && !lineByLine ? (
+          <button type="button" onClick={() => finish("miss")}>
+            <kbd>Ctrl</kbd>
+            <kbd>;</kbd>
+            显示答案
+          </button>
+        ) : (
+          <button type="button" onClick={() => speakCantonese(prompt)}>
+            <kbd>Ctrl</kbd>
+            <kbd>'</kbd>
+            读出来
+          </button>
+        )}
         {phase === "typing" || phase === "retype" ? (
           <>
             <button type="button" className="solid" onClick={onSpace}>
@@ -758,10 +802,10 @@ export function Practice({
               换格
             </span>
             {phase === "typing" && !lineByLine && (
-              <button type="button" onClick={() => finish("miss")}>
+              <button type="button" onClick={() => speakCantonese(prompt)}>
                 <kbd>Ctrl</kbd>
-                <kbd>;</kbd>
-                显示答案
+                <kbd>'</kbd>
+                读出来
               </button>
             )}
           </>
