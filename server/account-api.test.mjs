@@ -1,10 +1,12 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
+import { randomBytes, scryptSync } from "node:crypto"
 import { once } from "node:events"
 import { mkdtemp, rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import test from "node:test"
 
 async function freePort() {
@@ -19,11 +21,19 @@ async function freePort() {
 
 test("accounts own durable progress and sessions are server-side", async () => {
   const directory = await mkdtemp(join(tmpdir(), "jyutping-account-test-"))
+  const databasePath = join(directory, "account.sqlite")
+  const previousDb = new DatabaseSync(databasePath)
+  previousDb.exec("CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL, username_key TEXT NOT NULL UNIQUE, salt TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL)")
+  const salt = randomBytes(16).toString("hex")
+  const oldHash = scryptSync("old-password-123", Buffer.from(salt, "hex"), 64, { N: 16384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 }).toString("hex")
+  previousDb.prepare("INSERT INTO users (id, username, username_key, salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run("legacy-user", "Legacy", "legacy", salt, oldHash, Date.now())
+  previousDb.close()
   const port = await freePort()
   const origin = `http://127.0.0.1:${port}`
   const child = spawn(process.execPath, ["server/tts-api.mjs"], {
     cwd: new URL("../", import.meta.url),
-    env: { ...process.env, PORT: String(port), DATA_PATH: join(directory, "account.sqlite"), NODE_ENV: "test" },
+    env: { ...process.env, PORT: String(port), DATA_PATH: databasePath, NODE_ENV: "test" },
     stdio: "ignore",
   })
   async function request(path, method = "GET", payload, cookie, requestOrigin = origin) {
@@ -59,6 +69,10 @@ test("accounts own durable progress and sessions are server-side", async () => {
     assert.equal(login.status, 200)
     assert.equal((await request("/api/account/progress", "GET", undefined, login.cookie)).data.data.progress.first.attempts, 3)
     assert.equal((await request("/api/account/logout", "POST", undefined, login.cookie, "https://evil.example")).status, 403)
+    const db = new DatabaseSync(databasePath)
+    assert.equal((await request("/api/account/login", "POST", { username: "Legacy", password: "old-password-123" })).status, 200)
+    assert.equal(db.prepare("SELECT password_params FROM users WHERE id = ?").get("legacy-user").password_params, "scrypt15-3")
+    db.close()
   } finally {
     child.kill()
     await once(child, "exit")

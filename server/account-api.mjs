@@ -16,6 +16,7 @@ db.exec(`
     username_key TEXT NOT NULL UNIQUE,
     salt TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    password_params TEXT NOT NULL DEFAULT 'scrypt15-3',
     created_at INTEGER NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sessions (
@@ -30,6 +31,9 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 `)
+if (!db.prepare("PRAGMA table_info(users)").all().some((column) => column.name === "password_params")) {
+  db.exec("ALTER TABLE users ADD COLUMN password_params TEXT NOT NULL DEFAULT 'scrypt14-1'")
+}
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_BODY = 4 * 1024 * 1024
@@ -117,8 +121,11 @@ function credentials(value, registering) {
   return { username, usernameKey: username.toLowerCase(), password }
 }
 
-async function passwordHash(password, salt) {
-  return (await scrypt(password, Buffer.from(salt, "hex"), 64, { N: 16384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 })).toString("hex")
+async function passwordHash(password, salt, params = "scrypt15-3") {
+  const options = params === "scrypt14-1"
+    ? { N: 16384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 }
+    : { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 }
+  return (await scrypt(password, Buffer.from(salt, "hex"), 64, options)).toString("hex")
 }
 
 function validProgress(value) {
@@ -163,8 +170,8 @@ export async function handleAccountApi(request, response) {
       const salt = randomBytes(16).toString("hex")
       const hash = await passwordHash(input.password, salt)
       try {
-        db.prepare("INSERT INTO users (id, username, username_key, salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-          .run(user.id, user.username, input.usernameKey, salt, hash, Date.now())
+        db.prepare("INSERT INTO users (id, username, username_key, salt, password_hash, password_params, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(user.id, user.username, input.usernameKey, salt, hash, "scrypt15-3", Date.now())
       } catch (caught) {
         if (String(caught.message).includes("UNIQUE constraint failed")) return void error(response, 409, "这个账号已经注册过了，直接登录就行")
         throw caught
@@ -181,7 +188,7 @@ export async function handleAccountApi(request, response) {
       const user = db.prepare("SELECT * FROM users WHERE username_key = ?").get(input.usernameKey)
       const salt = user?.salt || "00000000000000000000000000000000"
       const expected = Buffer.from(user?.password_hash || "00".repeat(64), "hex")
-      const actual = Buffer.from(await passwordHash(input.password, salt), "hex")
+      const actual = Buffer.from(await passwordHash(input.password, salt, user?.password_params), "hex")
       if (!user || !timingSafeEqual(expected, actual)) {
         if (loginFailures.size > 2000) loginFailures.delete(loginFailures.keys().next().value)
         failures.count += 1
@@ -190,6 +197,12 @@ export async function handleAccountApi(request, response) {
         return void error(response, 401, "账号或密码不对")
       }
       loginFailures.delete(rateKey)
+      if (user.password_params === "scrypt14-1") {
+        const freshSalt = randomBytes(16).toString("hex")
+        const freshHash = await passwordHash(input.password, freshSalt)
+        db.prepare("UPDATE users SET salt = ?, password_hash = ?, password_params = ? WHERE id = ?")
+          .run(freshSalt, freshHash, "scrypt15-3", user.id)
+      }
       createSession(response, { id: user.id, username: user.username })
       return true
     }
