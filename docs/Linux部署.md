@@ -16,7 +16,7 @@ sudo install -d -o jyutping -g jyutping -m 0700 /var/lib/jyutping-memo
 sudo install -d -o jyutping -g jyutping -m 0750 /srv/jyutping-memo/.cache/tts
 ```
 
-`better-sqlite3` 含本机编译组件，必须在目标 Linux 服务器上执行 `npm ci`；不要复制 Windows 的 `node_modules`。每次更新代码后重新构建并重启服务。确保 Nginx 能读取 `dist/`。数据库目录必须可由服务用户写入，且不要放在会被部署脚本删除的目录里。
+数据库使用 Node.js 24 自带的 `node:sqlite`，无需额外安装数据库驱动。每次更新代码后重新构建并重启服务。确保 Nginx 能读取 `dist/`。数据库目录必须可由服务用户写入，且不要放在会被部署脚本删除的目录里。
 
 把 DeepSeek API key 放入 `/etc/jyutping-memo.env`：
 

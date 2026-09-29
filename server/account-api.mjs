@@ -1,15 +1,14 @@
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from "node:crypto"
 import { mkdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { promisify } from "node:util"
-import Database from "better-sqlite3"
 
 const scrypt = promisify(scryptCallback)
 const databasePath = resolve(process.env.DATA_PATH || ".data/jyutping.sqlite")
 mkdirSync(dirname(databasePath), { recursive: true })
-const db = new Database(databasePath)
-db.pragma("journal_mode = WAL")
-db.pragma("foreign_keys = ON")
+const db = new DatabaseSync(databasePath)
+db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -167,7 +166,7 @@ export async function handleAccountApi(request, response) {
         db.prepare("INSERT INTO users (id, username, username_key, salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
           .run(user.id, user.username, input.usernameKey, salt, hash, Date.now())
       } catch (caught) {
-        if (caught.code === "SQLITE_CONSTRAINT_UNIQUE") return void error(response, 409, "这个账号已经注册过了，直接登录就行")
+        if (String(caught.message).includes("UNIQUE constraint failed")) return void error(response, 409, "这个账号已经注册过了，直接登录就行")
         throw caught
       }
       createSession(response, user)
@@ -209,15 +208,22 @@ export async function handleAccountApi(request, response) {
       }
       const serialized = JSON.stringify(input.data)
       if (Buffer.byteLength(serialized) > MAX_BODY) return void error(response, 413, "练习数据太大")
-      const result = db.transaction(() => {
+      db.exec("BEGIN IMMEDIATE")
+      let result
+      try {
         const current = db.prepare("SELECT revision FROM progress WHERE user_id = ?").get(user.id)?.revision || 0
-        if (current !== input.revision) return null
-        const revision = current + 1
-        db.prepare(`INSERT INTO progress (user_id, data, revision, updated_at) VALUES (?, ?, ?, ?)
-          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, revision = excluded.revision, updated_at = excluded.updated_at`)
-          .run(user.id, serialized, revision, Date.now())
-        return revision
-      })()
+        if (current !== input.revision) result = null
+        else {
+          result = current + 1
+          db.prepare(`INSERT INTO progress (user_id, data, revision, updated_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, revision = excluded.revision, updated_at = excluded.updated_at`)
+            .run(user.id, serialized, result, Date.now())
+        }
+        db.exec("COMMIT")
+      } catch (caught) {
+        db.exec("ROLLBACK")
+        throw caught
+      }
       if (result === null) return void error(response, 409, "另一台设备更新了进度，请刷新页面")
       json(response, 200, { revision: result })
       return true
