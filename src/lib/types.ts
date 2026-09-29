@@ -69,10 +69,16 @@ export type LessonRecord = {
   lastAt: string
 }
 
+export type LessonProgress = {
+  attempts: number
+  cursor: Partial<Record<Difficulty, number>>
+}
+
 export type Store = {
   version: 1
   cards: Record<string, SavedCard>
   lessons: Record<string, LessonRecord>
+  progress: Record<string, LessonProgress>
   streak: { lastDay: string; count: number }
   settings: {
     difficulty: Difficulty

@@ -9,9 +9,13 @@ import {
   applyGrades,
   dueCards,
   formatDue,
+  lessonAttempts,
+  lessonCursor,
   loadStore,
   markLesson,
   nextDue,
+  noteAttempt,
+  saveCursor,
   saveStore,
   touchStreak,
 } from "../lib/storage"
@@ -62,6 +66,14 @@ export function Practice({
   onDone,
 }: Props) {
   const lesson = lessonOverride ?? (lessonId ? getLesson(lessonId) : undefined)
+  const tracksProgress = mode === "lesson" && !lessonOverride && Boolean(lesson)
+
+  function openingIndex(total: number) {
+    if (!tracksProgress || !lesson || total <= 0) return 0
+    const saved = lessonCursor(loadStore(), lesson.id, lineByLine ? "advanced" : loadStore().settings.difficulty)
+    return saved < total ? saved : 0
+  }
+
   const [steps] = useState<Step[]>(() => {
     const store = loadStore()
     if (mode === "review") return stepsFromCards(dueCards(store))
@@ -69,9 +81,12 @@ export function Practice({
     return buildSteps(lesson, lineByLine ? "advanced" : store.settings.difficulty)
   })
   const [difficulty] = useState(() => loadStore().settings.difficulty)
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useState(() => openingIndex(steps.length))
   const [phase, setPhase] = useState<"typing" | "retype" | "feedback">("typing")
-  const [slots, setSlots] = useState<string[]>(() => (steps[0]?.promptParts ?? []).map(() => ""))
+  const [slots, setSlots] = useState<string[]>(() => (steps[openingIndex(steps.length)]?.promptParts ?? []).map(() => ""))
+  const [attemptCount, setAttemptCount] = useState(() =>
+    tracksProgress && lesson ? lessonAttempts(loadStore(), lesson.id) : 0,
+  )
   const [active, setActive] = useState(0)
   const [message, setMessage] = useState("")
   const [combo, setCombo] = useState(0)
@@ -144,6 +159,13 @@ export function Practice({
     return () => window.clearTimeout(timer)
   }, [shake])
 
+  useEffect(() => {
+    if (!tracksProgress || !lesson) return
+    const store = loadStore()
+    if (lessonCursor(store, lesson.id, difficulty) === index) return
+    saveStore(saveCursor(store, lesson.id, difficulty, index))
+  }, [tracksProgress, lesson, difficulty, index])
+
   function remember(current: Step, gradeName: GradeName) {
     for (const seed of current.seeds) {
       const previous = pendingRef.current.get(seed.id)
@@ -163,6 +185,7 @@ export function Practice({
     if (total > 0) store = touchStreak(store)
     if (completed && mode === "lesson" && lesson) {
       store = markLesson(store, lesson.id, sessionRating(countsRef.current))
+      if (tracksProgress) store = saveCursor(store, lesson.id, difficulty, 0)
     }
     saveStore(store)
   }
@@ -414,6 +437,39 @@ export function Practice({
     onExit()
   }
 
+  function restartLesson() {
+    if (!tracksProgress || !lesson || steps.length === 0) return
+    const answered =
+      countsRef.current.perfect + countsRef.current.great + countsRef.current.hard + countsRef.current.miss
+    let next = loadStore()
+    if (index > 0 || lessonCursor(next, lesson.id, difficulty) > 0 || answered > 0) next = noteAttempt(next, lesson.id)
+    next = saveCursor(next, lesson.id, difficulty, 0)
+    saveStore(next)
+    setAttemptCount(lessonAttempts(next, lesson.id))
+    pendingRef.current = new Map()
+    persistedRef.current = false
+    editedRef.current = false
+    mistakesRef.current = false
+    comboRef.current = 0
+    scoreRef.current = 0
+    bestRef.current = 0
+    countsRef.current = { perfect: 0, great: 0, hard: 0, miss: 0 }
+    phaseRef.current = "typing"
+    composingRef.current = false
+    cancelRelease()
+    setIme(false)
+    setCombo(0)
+    setScore(0)
+    setCounts(countsRef.current)
+    setBurst(null)
+    setShake(false)
+    setMessage("")
+    setGrade(null)
+    setPhase("typing")
+    setIndex(0)
+    clearSlots(steps[0])
+  }
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === ";" && (event.ctrlKey || event.metaKey)) {
@@ -464,12 +520,22 @@ export function Practice({
   return (
     <div className="stage">
       <header className="stage-bar">
-        <button type="button" className="back" onClick={leave}>
-          {exitLabel}
-        </button>
+        <div className="stage-actions">
+          <button type="button" className="back" onClick={leave}>
+            {exitLabel}
+          </button>
+          {tracksProgress && (
+            <button type="button" className="back" onClick={restartLesson}>
+              从头练习
+            </button>
+          )}
+        </div>
         <div className="stage-title">
           <strong>{mode === "review" ? "今日复习" : lesson?.title}</strong>
-          <span>{subtitle ?? (mode === "review" ? "到期的卡片" : DIFFICULTY_LABEL[difficulty])}</span>
+          <span>
+            {subtitle ?? (mode === "review" ? "到期的卡片" : DIFFICULTY_LABEL[difficulty])}
+            {tracksProgress && attemptCount > 0 ? ` · 第 ${attemptCount} 次` : ""}
+          </span>
         </div>
         <div className="stage-score">
           <span>

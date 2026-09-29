@@ -1,8 +1,11 @@
 import { useEffect } from "react"
+import { AuthScreen } from "./components/Auth"
 import { Home } from "./components/Home"
 import { Practice } from "./components/Practice"
 import { Summary } from "./components/Summary"
+import { useSession } from "./lib/auth"
 import { clearSummary, isEscape, loadSummary, replaceRoute, saveSummary, useRoute } from "./lib/route"
+import { beginLesson, loadStore, saveStore } from "./lib/storage"
 import type { SummaryData } from "./lib/types"
 
 function finishLesson(data: SummaryData) {
@@ -37,13 +40,19 @@ function SummaryRoute() {
       onAgain={() => {
         clearSummary()
         if (data.mode === "review") replaceRoute({ name: "review" })
-        else if (data.lessonId) replaceRoute({ name: "practice", mode: "lesson", lessonId: data.lessonId })
+        else if (data.lessonId) {
+          const store = loadStore()
+          saveStore(beginLesson(store, data.lessonId, store.settings.difficulty, true))
+          replaceRoute({ name: "practice", mode: "lesson", lessonId: data.lessonId })
+        }
         else replaceRoute({ name: "home" })
       }}
       onNext={
         data.nextLessonId
           ? () => {
               clearSummary()
+              const store = loadStore()
+              saveStore(beginLesson(store, data.nextLessonId!, store.settings.difficulty, false))
               replaceRoute({ name: "practice", mode: "lesson", lessonId: data.nextLessonId! })
             }
           : undefined
@@ -56,7 +65,7 @@ function SummaryRoute() {
   )
 }
 
-export default function App() {
+function SignedInApp() {
   const route = useRoute()
 
   if (route.name === "practice" || route.name === "review") {
@@ -74,4 +83,10 @@ export default function App() {
   if (route.name === "summary") return <SummaryRoute />
 
   return <Home route={route} />
+}
+
+export default function App() {
+  const session = useSession()
+  if (!session) return <AuthScreen />
+  return <SignedInApp key={session.id} />
 }

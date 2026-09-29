@@ -1,32 +1,73 @@
 import { createEmptyCard, fsrs, type Card } from "ts-fsrs"
 import { betterRating, toRating } from "./score"
-import type { CardSeed, Difficulty, GradeName, LessonRecord, SavedCard, Store } from "./types"
+import { currentUserId, userStoreKey, LEGACY_STORE_KEY } from "./session"
+import type { CardSeed, Difficulty, GradeName, LessonProgress, LessonRecord, SavedCard, Store } from "./types"
 
-const KEY = "jyutping-memo:v1"
 const scheduler = fsrs()
+const DIFFICULTIES: Difficulty[] = ["beginner", "intermediate", "advanced"]
+
+function storeKey() {
+  const id = currentUserId()
+  return id ? userStoreKey(id) : LEGACY_STORE_KEY
+}
+
+function emptyProgress(): LessonProgress {
+  return { attempts: 0, cursor: {} }
+}
 
 function emptyStore(): Store {
   return {
     version: 1,
     cards: {},
     lessons: {},
+    progress: {},
     streak: { lastDay: "", count: 0 },
     settings: { difficulty: "beginner", sound: true, autoPlay: false, speakOnAnswer: true },
     seenIntro: false,
   }
 }
 
+function sanitizeProgress(value: unknown, lessons: Store["lessons"]): Store["progress"] {
+  const progress: Store["progress"] = {}
+  if (value && typeof value === "object") {
+    for (const [id, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (!entry || typeof entry !== "object") continue
+      const record = entry as { attempts?: unknown; cursor?: unknown }
+      const attempts = typeof record.attempts === "number" && record.attempts > 0 ? Math.floor(record.attempts) : 0
+      const cursor: LessonProgress["cursor"] = {}
+      if (record.cursor && typeof record.cursor === "object") {
+        for (const difficulty of DIFFICULTIES) {
+          const index = (record.cursor as Record<string, unknown>)[difficulty]
+          if (typeof index === "number" && Number.isInteger(index) && index > 0) cursor[difficulty] = index
+        }
+      }
+      if (attempts > 0 || Object.keys(cursor).length > 0) progress[id] = { attempts, cursor }
+    }
+  }
+  for (const [id, record] of Object.entries(lessons)) {
+    if (!record || record.completions <= 0) continue
+    const current = progress[id] ?? emptyProgress()
+    if (current.attempts >= record.completions && progress[id]) continue
+    progress[id] = { ...current, attempts: Math.max(current.attempts, record.completions) }
+  }
+  return progress
+}
+
 export function loadStore(): Store {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(storeKey())
     if (!raw) return emptyStore()
     const parsed = JSON.parse(raw) as Store
     if (parsed.version !== 1) return emptyStore()
+    const lessons = parsed.lessons ?? {}
     return {
       ...emptyStore(),
       ...parsed,
+      cards: parsed.cards ?? {},
+      lessons,
       settings: { ...emptyStore().settings, ...parsed.settings },
       streak: { ...emptyStore().streak, ...parsed.streak },
+      progress: sanitizeProgress(parsed.progress, lessons),
     }
   } catch {
     return emptyStore()
@@ -34,7 +75,73 @@ export function loadStore(): Store {
 }
 
 export function saveStore(store: Store) {
-  localStorage.setItem(KEY, JSON.stringify(store))
+  localStorage.setItem(storeKey(), JSON.stringify(store))
+}
+
+export function resetCurrentStore(): Store {
+  localStorage.removeItem(storeKey())
+  const next = emptyStore()
+  saveStore(next)
+  return next
+}
+
+function progressOf(store: Store, lessonId: string): LessonProgress {
+  return store.progress[lessonId] ?? emptyProgress()
+}
+
+export function lessonAttempts(store: Store, lessonId: string): number {
+  const attempts = progressOf(store, lessonId).attempts
+  return Number.isInteger(attempts) && attempts > 0 ? attempts : 0
+}
+
+export function lessonCursor(store: Store, lessonId: string, difficulty: Difficulty): number {
+  const index = progressOf(store, lessonId).cursor[difficulty] ?? 0
+  return Number.isInteger(index) && index > 0 ? index : 0
+}
+
+export function hasSavedCursor(store: Store, lessonId: string): boolean {
+  return DIFFICULTIES.some((difficulty) => lessonCursor(store, lessonId, difficulty) > 0)
+}
+
+export function noteAttempt(store: Store, lessonId: string): Store {
+  const current = progressOf(store, lessonId)
+  return {
+    ...store,
+    progress: {
+      ...store.progress,
+      [lessonId]: { ...current, attempts: current.attempts + 1 },
+    },
+  }
+}
+
+export function beginLesson(store: Store, lessonId: string, difficulty: Difficulty, fresh: boolean): Store {
+  const next = fresh ? saveCursor(store, lessonId, difficulty, 0) : store
+  if (lessonCursor(next, lessonId, difficulty) > 0) return next
+  return noteAttempt(next, lessonId)
+}
+
+export function saveCursor(store: Store, lessonId: string, difficulty: Difficulty, index: number): Store {
+  const current = progressOf(store, lessonId)
+  const cursor = { ...current.cursor }
+  if (index > 0) cursor[difficulty] = index
+  else delete cursor[difficulty]
+  return {
+    ...store,
+    progress: {
+      ...store.progress,
+      [lessonId]: { ...current, cursor },
+    },
+  }
+}
+
+export function clearCursors(store: Store, lessonIds: string[]): Store {
+  const progress = { ...store.progress }
+  for (const id of lessonIds) {
+    const current = progress[id]
+    if (!current) continue
+    progress[id] = { ...current, cursor: {} }
+  }
+  return { ...store, progress }
 }
 
 export function todayKey(date = new Date()): string {

@@ -3,12 +3,19 @@ import { commonThemes } from "../data/common-themes"
 import { sections } from "../data/lessons"
 import { Lookup } from "./Lookup"
 import { ListeningReading } from "./ListeningReading"
+import { logout, useSession } from "../lib/auth"
 import { back, COMMON_BAND_SIZE, go, isEscape, parentOf } from "../lib/route"
 import type { Route } from "../lib/route"
 import { buildSteps } from "../lib/steps"
 import {
+  beginLesson,
+  clearCursors,
   dueCards,
+  hasSavedCursor,
+  lessonAttempts,
+  lessonCursor,
   loadStore,
+  resetCurrentStore,
   saveStore,
   setDifficulty,
 } from "../lib/storage"
@@ -35,7 +42,16 @@ type Props = {
   route: Extract<Route, { name: "home" | "section" | "lookup" | "lyrics" }>
 }
 
+function tallyText(total: number, unit: string, done: number, active: number, attempts: number) {
+  const parts = [`${total} ${unit}`]
+  if (done > 0) parts.push(`已练 ${done}`)
+  if (active > 0) parts.push(`进行中 ${active}`)
+  if (attempts > 0) parts.push(`练过 ${attempts} 次`)
+  return parts.join(" · ")
+}
+
 export function Home({ route }: Props) {
+  const session = useSession()
   const [store, setStore] = useState<Store>(() => loadStore())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const sectionId = route.name === "section" ? route.sectionId : null
@@ -120,6 +136,41 @@ export function Home({ route }: Props) {
     setStore(next)
   }
 
+  function lessonStats(lessons: Lesson[]) {
+    let done = 0
+    let active = 0
+    let attempts = 0
+    for (const lesson of lessons) {
+      if (store.lessons[lesson.id]) done += 1
+      if (lessonCursor(store, lesson.id, difficulty) > 0) active += 1
+      attempts += lessonAttempts(store, lesson.id)
+    }
+    return { done, active, attempts }
+  }
+
+  function sectionLessonIds() {
+    if (!section) return []
+    if (section.id !== "common") return section.lessons.map((lesson) => lesson.id)
+    return [
+      ...section.lessons.map((lesson) => lesson.id),
+      ...commonThemes.flatMap((theme) => theme.lessons.map((lesson) => lesson.id)),
+    ]
+  }
+
+  function openLesson(id: string, fresh = false) {
+    const next = beginLesson(store, id, difficulty, fresh)
+    if (next !== store) saveStore(next)
+    go({ name: "practice", mode: "lesson", lessonId: id })
+  }
+
+  function clearProgress(ids: string[], message: string) {
+    if (!window.confirm(message)) return
+    commit(clearCursors(store, ids))
+  }
+
+  const clearIds = listed ? listed.map((lesson) => lesson.id) : section ? sectionLessonIds() : []
+  const canClear = clearIds.some((id) => hasSavedCursor(store, id))
+
   return (
     <div className="home">
       <header className="top">
@@ -131,6 +182,12 @@ export function Home({ route }: Props) {
           </div>
         </div>
         <div className="top-actions">
+          {session && (
+            <button className="pill user-pill" type="button" onClick={() => logout()}>
+              <span>{session.username}</span>
+              <b>退出</b>
+            </button>
+          )}
           <button
             className="pill"
             type="button"
@@ -207,14 +264,15 @@ export function Home({ route }: Props) {
               出题时朗读
             </label>
           </div>
-          <p className="lookup-note">清空练习记录会删掉这台电脑上的成绩、复习安排和连续天数。课文还在。</p>
+          <p className="lookup-note">
+            当前账号 {session?.username ?? ""}。清空练习记录会删掉这个账号的成绩、复习安排、练习次数和连续天数。账号还在，课文也还在。
+          </p>
           <button
             type="button"
             className="texty"
             onClick={() => {
-              if (!window.confirm("清空这台电脑上的练习记录？成绩和复习安排都会删掉。")) return
-              localStorage.removeItem("jyutping-memo:v1")
-              setStore(loadStore())
+              if (!window.confirm("清空这个账号的练习记录？成绩、进度和复习安排都会删掉。")) return
+              setStore(resetCurrentStore())
               setSettingsOpen(true)
             }}
           >
@@ -237,24 +295,50 @@ export function Home({ route }: Props) {
               <h2>{heading}</h2>
               <p>{subheading}</p>
             </div>
+            {canClear && (
+              <button
+                type="button"
+                className="texty section-clear"
+                onClick={() =>
+                  clearProgress(
+                    clearIds,
+                    listed
+                      ? "清空这里的进度？这些课会回到第一题，练过的次数还留着。"
+                      : "清空这个板块的进度？每课都会回到第一题，练过的次数还留着。",
+                  )
+                }
+              >
+                清空进度
+              </button>
+            )}
             {listed ? (
             <ol>
               {listed.map((lesson, index) => {
                 const record = store.lessons[lesson.id]
                 const steps = buildSteps(lesson, difficulty).length
+                const cursor = lessonCursor(store, lesson.id, difficulty)
+                const attempts = lessonAttempts(store, lesson.id)
                 return (
-                  <li key={lesson.id}>
-                    <button type="button" onClick={() => go({ name: "practice", mode: "lesson", lessonId: lesson.id })}>
+                  <li key={lesson.id} className="lesson-row">
+                    <button type="button" className="lesson-open" onClick={() => openLesson(lesson.id)}>
                       <span className="num">{String(index + 1).padStart(2, "0")}</span>
                       <span>
                         <strong>{lesson.title}</strong>
                         <em>{lesson.blurb}</em>
                       </span>
                       <span className="meta">
-                        <b>{record?.best ?? "未练"}</b>
-                        <small>{steps} 题</small>
+                        <b>{record?.best ?? (cursor > 0 ? "进行中" : attempts > 0 ? "未打完" : "未练")}</b>
+                        <small>
+                          {cursor > 0 ? `续第 ${cursor + 1} / ${steps} 题` : `${steps} 题`}
+                          {attempts > 0 ? ` · 练过 ${attempts} 次` : ""}
+                        </small>
                       </span>
                     </button>
+                    {cursor > 0 && (
+                      <button type="button" className="lesson-restart" onClick={() => openLesson(lesson.id, true)}>
+                        从头
+                      </button>
+                    )}
                   </li>
                 )
               })}
@@ -263,7 +347,7 @@ export function Home({ route }: Props) {
               <div className="section-grid">
                 {folder === "themes"
                   ? commonThemes.map((item) => {
-                      const done = item.lessons.filter((lesson) => store.lessons[lesson.id]).length
+                      const stats = lessonStats(item.lessons)
                       const words = item.lessons.reduce((sum, lesson) => sum + lesson.sentences.length, 0)
                       return (
                         <button
@@ -274,9 +358,7 @@ export function Home({ route }: Props) {
                         >
                           <strong>{item.title}</strong>
                           <em>{item.blurb}</em>
-                          <small>
-                            {words} 词{done > 0 ? ` · 已练 ${done}` : ""}
-                          </small>
+                          <small>{tallyText(words, "词", stats.done, stats.active, stats.attempts)}</small>
                         </button>
                       )
                     })
@@ -292,7 +374,7 @@ export function Home({ route }: Props) {
                         <small>{commonThemes.reduce((sum, item) => sum + item.lessons.length, 0)} 课</small>
                       </button>
                       {bands.map((lessons, index) => {
-                  const done = lessons.filter((lesson) => store.lessons[lesson.id]).length
+                  const stats = lessonStats(lessons)
                   return (
                     <button
                       key={rangeTitle(lessons)}
@@ -304,9 +386,7 @@ export function Home({ route }: Props) {
                       <em>
                         {lessonWord(lessons[0])} 到 {lessonWord(lessons.at(-1), true)}
                       </em>
-                      <small>
-                        {lessons.length} 课{done > 0 ? ` · 已练 ${done}` : ""}
-                      </small>
+                      <small>{tallyText(lessons.length, "课", stats.done, stats.active, stats.attempts)}</small>
                     </button>
                   )
                       })}
@@ -323,7 +403,7 @@ export function Home({ route }: Props) {
             </div>
             <div className="section-grid">
               {sections.map((item, sectionIndex) => {
-                const done = item.lessons.filter((lesson) => store.lessons[lesson.id]).length
+                const stats = lessonStats(item.lessons)
                 return (
                   <button
                     key={item.id}
@@ -334,9 +414,7 @@ export function Home({ route }: Props) {
                     <span className="section-card-index">{String(sectionIndex + 1).padStart(2, "0")}</span>
                     <strong>{item.title}</strong>
                     <em>{item.blurb}</em>
-                    <small>
-                      {item.lessons.length} 课{done > 0 ? ` · 已练 ${done}` : ""}
-                    </small>
+                    <small>{tallyText(item.lessons.length, "课", stats.done, stats.active, stats.attempts)}</small>
                     <span className="section-card-arrow" aria-hidden="true">↗</span>
                   </button>
                 )
