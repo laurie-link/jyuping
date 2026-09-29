@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --test server/account-api.test.mjs",
     "preview": "vite preview",
     "start:tts": "node --env-file-if-exists=.env.local server/tts-api.mjs",
     "start:api": "node --env-file-if-exists=.env.local server/tts-api.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "msedge-tts": "^2.0.8",
     "opencc-js": "^1.4.2",
     "react": "^19.2.8",
@@ -20,6 +22,7 @@
     "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

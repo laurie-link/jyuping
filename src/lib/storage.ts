@@ -1,21 +1,40 @@
 import { createEmptyCard, fsrs, type Card } from "ts-fsrs"
 import { betterRating, toRating } from "./score"
-import { currentUserId, userStoreKey, LEGACY_STORE_KEY } from "./session"
 import type { CardSeed, Difficulty, GradeName, LessonProgress, LessonRecord, SavedCard, Store } from "./types"
 
 const scheduler = fsrs()
 const DIFFICULTIES: Difficulty[] = ["beginner", "intermediate", "advanced"]
 
-function storeKey() {
-  const id = currentUserId()
-  return id ? userStoreKey(id) : LEGACY_STORE_KEY
+let activeUserId: string | null = null
+let storeCache: Store | null = null
+let revision = 0
+let pending: Store | null = null
+let writing = false
+let syncStatus: "saved" | "saving" | "error" | "conflict" = "saved"
+const syncListeners = new Set<() => void>()
+const PENDING_PREFIX = "jyutping-memo:pending:"
+
+function emitSync() {
+  for (const listener of syncListeners) listener()
+}
+
+function setSyncStatus(next: typeof syncStatus) {
+  if (syncStatus === next) return
+  syncStatus = next
+  emitSync()
+}
+
+export function getSyncStatus() { return syncStatus }
+export function subscribeSync(listener: () => void) {
+  syncListeners.add(listener)
+  return () => syncListeners.delete(listener)
 }
 
 function emptyProgress(): LessonProgress {
   return { attempts: 0, cursor: {} }
 }
 
-function emptyStore(): Store {
+export function emptyStore(): Store {
   return {
     version: 1,
     cards: {},
@@ -53,37 +72,167 @@ function sanitizeProgress(value: unknown, lessons: Store["lessons"]): Store["pro
   return progress
 }
 
-export function loadStore(): Store {
-  try {
-    const raw = localStorage.getItem(storeKey())
-    if (!raw) return emptyStore()
-    const parsed = JSON.parse(raw) as Store
-    if (parsed.version !== 1) return emptyStore()
-    const lessons = parsed.lessons ?? {}
-    return {
-      ...emptyStore(),
-      ...parsed,
-      cards: parsed.cards ?? {},
-      lessons,
-      settings: { ...emptyStore().settings, ...parsed.settings },
-      streak: { ...emptyStore().streak, ...parsed.streak },
-      progress: sanitizeProgress(parsed.progress, lessons),
-    }
-  } catch {
-    return emptyStore()
+export function sanitizeStore(value: unknown): Store {
+  if (!value || typeof value !== "object") return emptyStore()
+  const parsed = value as Partial<Store>
+  if (parsed.version !== 1) return emptyStore()
+  const lessons = parsed.lessons && typeof parsed.lessons === "object" ? parsed.lessons : {}
+  return {
+    ...emptyStore(), ...parsed,
+    cards: parsed.cards && typeof parsed.cards === "object" ? parsed.cards : {},
+    lessons,
+    settings: { ...emptyStore().settings, ...parsed.settings },
+    streak: { ...emptyStore().streak, ...parsed.streak },
+    progress: sanitizeProgress(parsed.progress, lessons),
   }
 }
 
+function pendingKey(userId: string) { return `${PENDING_PREFIX}${userId}` }
+
+function rememberPending() {
+  if (!activeUserId || !pending) return
+  try { localStorage.setItem(pendingKey(activeUserId), JSON.stringify({ revision, data: pending })) } catch { /* Server sync still proceeds. */ }
+}
+
+async function flush() {
+  if (writing || !activeUserId || !pending || syncStatus === "conflict") return
+  writing = true
+  setSyncStatus("saving")
+  while (pending && activeUserId) {
+    const userId: string = activeUserId
+    const snapshot = pending
+    pending = null
+    try {
+      const response = await fetch("/api/account/progress", {
+        method: "PUT", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision, data: snapshot }),
+      })
+      if (response.status === 409) {
+        pending = pending ?? snapshot
+        setSyncStatus("conflict")
+        break
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const result = await response.json() as { revision: number }
+      if (activeUserId !== userId) break
+      revision = result.revision
+      if (!pending) {
+        try { localStorage.removeItem(pendingKey(userId)) } catch { /* optional cache */ }
+      } else rememberPending()
+    } catch {
+      pending = pending ?? snapshot
+      rememberPending()
+      setSyncStatus("error")
+      break
+    }
+  }
+  writing = false
+  if (!pending) setSyncStatus("saved")
+}
+
+export async function initializeStore(userId: string, legacyStore?: Store | null) {
+  const response = await fetch("/api/account/progress", { credentials: "same-origin" })
+  if (!response.ok) throw new Error("读取服务器进度失败")
+  const result = await response.json() as { data: Store | null; revision: number }
+  activeUserId = userId
+  revision = result.revision
+  pending = null
+  storeCache = sanitizeStore(result.data)
+  let recovered: { data: Store; revision: number } | null = null
+  try {
+    const raw = localStorage.getItem(pendingKey(userId))
+    if (raw) recovered = JSON.parse(raw) as { data: Store; revision: number }
+  } catch { /* Invalid cache is ignored. */ }
+  if (recovered && recovered.revision === revision) {
+    storeCache = sanitizeStore(recovered.data)
+    pending = storeCache
+  } else if (recovered && JSON.stringify(recovered.data) !== JSON.stringify(result.data)) {
+    storeCache = sanitizeStore(recovered.data)
+    pending = storeCache
+    setSyncStatus("conflict")
+  } else if (recovered) {
+    try { localStorage.removeItem(pendingKey(userId)) } catch { /* optional cache */ }
+  }
+  if (!result.data && !pending && legacyStore) {
+    storeCache = sanitizeStore(legacyStore)
+    pending = storeCache
+    rememberPending()
+  }
+  if (syncStatus !== "conflict") setSyncStatus(pending ? "saving" : "saved")
+  if (pending && syncStatus !== "conflict") await flush()
+}
+
+export function clearStore() {
+  activeUserId = null
+  storeCache = null
+  pending = null
+  revision = 0
+  setSyncStatus("saved")
+}
+
+export function loadStore(): Store {
+  return storeCache ?? emptyStore()
+}
+
 export function saveStore(store: Store) {
-  localStorage.setItem(storeKey(), JSON.stringify(store))
+  if (!activeUserId) throw new Error("请先登录")
+  storeCache = sanitizeStore(store)
+  pending = storeCache
+  rememberPending()
+  void flush()
+}
+
+export async function flushStore() {
+  if (pending && syncStatus !== "conflict") await flush()
+  while (writing) await new Promise((resolve) => setTimeout(resolve, 50))
+  return syncStatus === "saved"
+}
+
+export function retrySync() {
+  if (syncStatus === "conflict") return
+  void flush()
+}
+
+export async function resolveConflict(preferLocal: boolean) {
+  if (!activeUserId || syncStatus !== "conflict") return
+  try {
+    const response = await fetch("/api/account/progress", { credentials: "same-origin" })
+    if (!response.ok) throw new Error("Could not reload progress")
+    const latest = await response.json() as { data: Store | null; revision: number }
+    revision = latest.revision
+    if (preferLocal) {
+      pending = storeCache
+      rememberPending()
+      setSyncStatus("saving")
+      await flush()
+    } else {
+      pending = null
+      storeCache = sanitizeStore(latest.data)
+      try { localStorage.removeItem(pendingKey(activeUserId)) } catch { /* optional cache */ }
+      setSyncStatus("saved")
+      window.location.reload()
+    }
+  } catch {
+    setSyncStatus("conflict")
+  }
 }
 
 export function resetCurrentStore(): Store {
-  localStorage.removeItem(storeKey())
   const next = emptyStore()
   saveStore(next)
   return next
 }
+
+window.addEventListener("online", retrySync)
+window.addEventListener("beforeunload", (event) => {
+  if (syncStatus === "saved") return
+  event.preventDefault()
+  event.returnValue = ""
+})
+window.setInterval(() => {
+  if (syncStatus === "error" && navigator.onLine) retrySync()
+}, 10_000)
 
 function progressOf(store: Store, lessonId: string): LessonProgress {
   return store.progress[lessonId] ?? emptyProgress()

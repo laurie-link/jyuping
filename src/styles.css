@@ -75,6 +75,10 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
   font-size: 18px;
 }
 .auth-fields input:focus { outline: none; border-color: rgba(228, 177, 90, 0.7); }
+.legacy-import { margin-top: 16px; color: var(--muted); font-size: 13px; }
+.legacy-import summary { cursor: pointer; }
+.legacy-import label { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.legacy-import input { background: #161512; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .auth-card .solid { margin-top: 18px; width: 100%; }
 .auth-error { margin: 12px 0 0; color: #ef9176; }
 .section-clear { margin-top: 8px; }
@@ -718,4 +722,30 @@ kbd {
 }
 @media (prefers-reduced-motion: reduce) {
   .shake, .burst { animation: none; }
+}
+.sync-notice {
+  position: fixed;
+  z-index: 1000;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: #fff;
+  background: #47382a;
+  box-shadow: 0 8px 24px #0003;
+  font-size: 14px;
+}
+
+.sync-notice button {
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #251b12;
+  background: #f4c475;
+  cursor: pointer;
 }

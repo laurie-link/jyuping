@@ -2,9 +2,24 @@ import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv } from "vite"
 import { cantoneseTtsPlugin } from "./server/tts.ts"
 import { handleTranslate } from "./server/translate.ts"
+import { handleAccountApi } from "./server/account-api.mjs"
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), cantoneseTtsPlugin(), {
+    name: "account-api",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (!request.url?.startsWith("/api/account/")) return next()
+        void handleAccountApi(request, response)
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (!request.url?.startsWith("/api/account/")) return next()
+        void handleAccountApi(request, response)
+      })
+    },
+  }, {
     name: "translate-api",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {

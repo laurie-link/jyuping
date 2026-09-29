@@ -185,7 +185,7 @@ export function Home({ route }: Props) {
         </div>
         <div className="top-actions">
           {session && (
-            <button className="pill user-pill" type="button" onClick={() => logout()}>
+            <button className="pill user-pill" type="button" onClick={() => { void logout().then((result) => { if (!result.ok) window.alert(result.error) }) }}>
               <span>{session.username}</span>
               <b>退出</b>
             </button>

@@ -1,6 +1,7 @@
 import { createServer } from "node:http"
 import { sweepCache, synthesize } from "./tts.ts"
 import { handleTranslate } from "./translate.ts"
+import { handleAccountApi } from "./account-api.mjs"
 
 const port = Number(process.env.PORT ?? 8787)
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -11,6 +12,10 @@ let pending = 0
 const maxPending = 12
 
 const server = createServer((request, response) => {
+  if (request.url?.startsWith("/api/account/")) {
+    void handleAccountApi(request, response)
+    return
+  }
   let url
   try {
     url = new URL(request.url ?? "/", "http://127.0.0.1")
