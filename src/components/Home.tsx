@@ -101,6 +101,7 @@ export function Home({ route }: Props) {
       if (!store.seenIntro) {
         event.preventDefault()
         event.stopImmediatePropagation()
+        commit({ ...store, seenIntro: true })
         return
       }
       if (settingsOpen) {
@@ -116,7 +117,7 @@ export function Home({ route }: Props) {
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [route, settingsOpen, store.seenIntro])
+  }, [route, settingsOpen, store])
 
   function openSection(id: string) {
     setSettingsOpen(false)
