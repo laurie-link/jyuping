@@ -3,6 +3,7 @@ import { commonThemes } from "../data/common-themes"
 import { sections } from "../data/lessons"
 import { Lookup } from "./Lookup"
 import { ListeningReading } from "./ListeningReading"
+import { Translate } from "./Translate"
 import { logout, useSession } from "../lib/auth"
 import { back, COMMON_BAND_SIZE, go, isEscape, parentOf } from "../lib/route"
 import type { Route } from "../lib/route"
@@ -39,7 +40,7 @@ const DIFFICULTIES: Array<{ id: Difficulty; label: string; hint: string }> = [
 ]
 
 type Props = {
-  route: Extract<Route, { name: "home" | "section" | "lookup" | "lyrics" }>
+  route: Extract<Route, { name: "home" | "section" | "lookup" | "lyrics" | "translate" }>
 }
 
 function tallyText(total: number, unit: string, done: number, active: number, attempts: number) {
@@ -58,7 +59,7 @@ export function Home({ route }: Props) {
   const band = route.name === "section" ? route.band : null
   const folder = route.name === "section" ? route.folder : null
   const themeId = route.name === "section" ? route.themeId : null
-  const tool = route.name === "lookup" ? "lookup" : route.name === "lyrics" ? "lyrics" : null
+  const tool = route.name === "lookup" ? "lookup" : route.name === "lyrics" ? "lyrics" : route.name === "translate" ? "translate" : null
   const due = dueCards(store)
   const difficulty = store.settings.difficulty
   const section = sections.find((item) => item.id === sectionId)
@@ -282,7 +283,9 @@ export function Home({ route }: Props) {
       )}
 
       <section className="lessons">
-        {route.name === "lyrics" ? (
+        {route.name === "translate" ? (
+          <Translate onBack={() => back({ name: "home" })} />
+        ) : route.name === "lyrics" ? (
           <ListeningReading route={route} />
         ) : tool === "lookup" ? (
           <Lookup onBack={() => back({ name: "home" })} />
@@ -423,6 +426,24 @@ export function Home({ route }: Props) {
           </>
         )}
       </section>
+
+      {!section && tool === null && (
+        <section className="lessons">
+          <div className="panel-head">
+            <h2>互译</h2>
+            <p>普通话与粤语白话之间自由切换</p>
+          </div>
+          <button type="button" className="lookup-plate translate-plate" onClick={() => go({ name: "translate" })}>
+            <span>
+              <span className="plate-label">TRANSLATE / 03</span>
+              <strong>普通话 ↔ 粤语</strong>
+              <em>查短词，翻整句，标粤拼，听读音。</em>
+            </span>
+            <span className="translate-plate-art" aria-hidden="true">譯</span>
+            <small>开始互译 <span aria-hidden="true">↗</span></small>
+          </button>
+        </section>
+      )}
 
       {!section && tool === null && (
         <section className="lessons">

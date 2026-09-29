@@ -10,6 +10,7 @@ export type Route =
   | { name: "home" }
   | { name: "section"; sectionId: string; band: number | null; folder: null | "themes"; themeId: string | null }
   | { name: "lookup" }
+  | { name: "translate" }
   | { name: "lyrics"; query: string; songId: number | null; drill: null | "copy" | "practice"; done: boolean }
   | { name: "practice"; mode: "lesson"; lessonId: string }
   | { name: "review" }
@@ -37,6 +38,7 @@ export function parseRoute(hash: string): Route {
   const parts = partsOf(hash)
   if (parts.length === 0) return HOME
   if (parts[0] === "lookup" && parts.length === 1) return { name: "lookup" }
+  if (parts[0] === "translate" && parts.length === 1) return { name: "translate" }
   if (parts[0] === "review" && parts.length === 1) return { name: "review" }
   if (parts[0] === "summary" && parts.length === 1) return { name: "summary" }
   if (parts[0] === "practice" && parts.length === 2 && getLesson(parts[1])) {
@@ -81,6 +83,8 @@ export function toHash(route: Route): string {
       return "#/"
     case "lookup":
       return "#/lookup"
+    case "translate":
+      return "#/translate"
     case "review":
       return "#/review"
     case "summary":

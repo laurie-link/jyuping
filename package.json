@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "start:tts": "node server/tts-api.mjs"
+    "start:tts": "node --env-file-if-exists=.env.local server/tts-api.mjs",
+    "start:api": "node --env-file-if-exists=.env.local server/tts-api.mjs"
   },
   "dependencies": {
     "msedge-tts": "^2.0.8",

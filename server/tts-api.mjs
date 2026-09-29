@@ -1,5 +1,6 @@
 import { createServer } from "node:http"
 import { sweepCache, synthesize } from "./tts.ts"
+import { handleTranslate } from "./translate.ts"
 
 const port = Number(process.env.PORT ?? 8787)
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -18,6 +19,10 @@ const server = createServer((request, response) => {
     return
   }
 
+  if (url.pathname === "/api/translate") {
+    void handleTranslate(request, response, process.env.DEEPSEEK_API_KEY)
+    return
+  }
   if (url.pathname !== "/api/tts") {
     response.writeHead(404).end()
     return
