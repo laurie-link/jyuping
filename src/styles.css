@@ -64,7 +64,6 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
   background: #211f1b;
 }
 .auth-card h2 { margin: 18px 0 0; font-size: 36px; letter-spacing: -0.03em; }
-.auth-card .lede { margin-top: 8px; font-size: 15px; }
 .auth-fields { display: flex; flex-direction: column; gap: 14px; margin-top: 22px; }
 .auth-fields label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 13px; }
 .auth-fields input {
@@ -75,10 +74,6 @@ h1, h2, strong { font-family: var(--serif); font-weight: 560; }
   font-size: 18px;
 }
 .auth-fields input:focus { outline: none; border-color: rgba(228, 177, 90, 0.7); }
-.legacy-import { margin-top: 16px; color: var(--muted); font-size: 13px; }
-.legacy-import summary { cursor: pointer; }
-.legacy-import label { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.legacy-import input { background: #161512; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .auth-card .solid { margin-top: 18px; width: 100%; }
 .auth-error { margin: 12px 0 0; color: #ef9176; }
 .section-clear { margin-top: 8px; }

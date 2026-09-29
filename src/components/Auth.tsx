@@ -8,7 +8,6 @@ export function AuthScreen() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
-  const [oldPassword, setOldPassword] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
 
@@ -27,7 +26,7 @@ export function AuthScreen() {
     }
     setPending(true)
     setError("")
-    const result = mode === "register" ? await register(username, password, oldPassword) : await login(username, password, oldPassword)
+    const result = mode === "register" ? await register(username, password) : await login(username, password)
     if (!result.ok) setError(result.error)
     setPending(false)
   }
@@ -53,11 +52,6 @@ export function AuthScreen() {
           </button>
         </div>
         <h2>{mode === "login" ? "进入你的练习" : "建一个账号"}</h2>
-        <p className="lede">
-          {mode === "login"
-            ? "进度记在服务器账号上。旧版本机账号请先点“注册”，用相同账号建立服务器账号。"
-            : "新密码至少 8 个字。旧版本机账号可用相同账号注册，进度会导入。"}
-        </p>
         <div className="auth-fields">
           <label>
             账号
@@ -94,19 +88,6 @@ export function AuthScreen() {
             </label>
           )}
         </div>
-        <details className="legacy-import">
-          <summary>旧版密码和现在不同？导入这台浏览器的进度</summary>
-          <label>
-            旧版密码
-            <input
-              name="oldPassword"
-              type="password"
-              autoComplete="off"
-              value={oldPassword}
-              onChange={(event) => setOldPassword(event.target.value)}
-            />
-          </label>
-        </details>
         {error && (
           <p className="auth-error" role="alert">
             {error}
@@ -115,7 +96,6 @@ export function AuthScreen() {
         <button type="submit" className="solid" disabled={pending}>
           {pending ? "请稍等" : mode === "login" ? "登录" : "注册"}
         </button>
-        <p className="lookup-note">账号和练习进度保存在本站服务器。旧版在这台浏览器里的记录，使用相同账号并输入旧版密码后会导入到空的服务器账号。</p>
       </form>
     </div>
   )
