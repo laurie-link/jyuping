@@ -55,6 +55,7 @@ export function Home({ route }: Props) {
   const session = useSession()
   const [store, setStore] = useState<Store>(() => loadStore())
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const sectionId = route.name === "section" ? route.sectionId : null
   const band = route.name === "section" ? route.band : null
   const folder = route.name === "section" ? route.folder : null
@@ -93,6 +94,7 @@ export function Home({ route }: Props) {
 
   useEffect(() => {
     setSettingsOpen(false)
+    setMenuOpen(false)
   }, [route])
 
   useEffect(() => {
@@ -110,6 +112,12 @@ export function Home({ route }: Props) {
         setSettingsOpen(false)
         return
       }
+      if (menuOpen) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setMenuOpen(false)
+        return
+      }
       if (route.name === "home" || route.name === "lyrics") return
       event.preventDefault()
       event.stopImmediatePropagation()
@@ -117,7 +125,13 @@ export function Home({ route }: Props) {
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [route, settingsOpen, store])
+  }, [route, settingsOpen, menuOpen, store])
+
+  function navigate(next: Route) {
+    setSettingsOpen(false)
+    setMenuOpen(false)
+    go(next)
+  }
 
   function openSection(id: string) {
     setSettingsOpen(false)
@@ -175,33 +189,48 @@ export function Home({ route }: Props) {
 
   return (
     <div className="home">
-      <header className="top">
-        <div className="brand">
+      <header className="top site-header">
+        <button className="brand brand-link" type="button" onClick={() => navigate({ name: "home" })} aria-label="粤拼记首页">
           <span className="seal">拼</span>
           <div>
             <strong>粤拼记</strong>
             <span>看见粤语，打出粤拼</span>
           </div>
-        </div>
-        <div className="top-actions">
-          {session && (
-            <button className="pill user-pill" type="button" onClick={() => { void logout().then((result) => { if (!result.ok) window.alert(result.error) }) }}>
-              <span>{session.username}</span>
-              <b>退出</b>
+        </button>
+        <button
+          className="nav-toggle"
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls="primary-navigation"
+          onClick={() => { setSettingsOpen(false); setMenuOpen((open) => !open) }}
+        >
+          <span className="nav-toggle-icon" aria-hidden="true"><i /><i /><i /></span>
+          菜单
+        </button>
+        <div className={`site-header-content${menuOpen ? " is-open" : ""}`} id="primary-navigation">
+          <nav className="site-nav" aria-label="主导航">
+            <button className="site-nav-link" type="button" aria-current={route.name === "home" || route.name === "section" ? "page" : undefined} onClick={() => navigate({ name: "home" })}>课程</button>
+            <button className="site-nav-link" type="button" aria-current={route.name === "translate" ? "page" : undefined} onClick={() => navigate({ name: "translate" })}>互译</button>
+            <button className="site-nav-link" type="button" aria-current={route.name === "lyrics" ? "page" : undefined} onClick={() => navigate({ name: "lyrics", query: "", songId: null, drill: null, done: false })}>听读</button>
+            <button className="site-nav-link" type="button" aria-current={route.name === "lookup" ? "page" : undefined} onClick={() => navigate({ name: "lookup" })}>查字</button>
+            <button className="site-nav-link site-nav-review" type="button" onClick={() => navigate({ name: "review" })}>复习 <b>{due.length}</b></button>
+          </nav>
+          <div className="top-actions">
+            <button
+              className={`header-action${settingsOpen ? " is-active" : ""}`}
+              type="button"
+              aria-expanded={settingsOpen}
+              onClick={() => { setMenuOpen(false); setSettingsOpen((open) => !open) }}
+            >
+              设置
             </button>
-          )}
-          <button
-            className="pill"
-            type="button"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            设置
-          </button>
-          <button className="pill" type="button" onClick={() => go({ name: "review" })}>
-            今日复习
-            <b>{due.length}</b>
-          </button>
+            {session && (
+              <button className="header-action user-pill" type="button" onClick={() => { void logout().then((result) => { if (!result.ok) window.alert(result.error) }) }}>
+                <span>{session.username}</span>
+                <small>退出</small>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
