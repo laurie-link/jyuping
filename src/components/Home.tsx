@@ -1,8 +1,10 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { commonThemes } from "../data/common-themes"
 import { sections } from "../data/lessons"
 import { Lookup } from "./Lookup"
 import { ListeningReading } from "./ListeningReading"
+import { back, COMMON_BAND_SIZE, go, isEscape, parentOf } from "../lib/route"
+import type { Route } from "../lib/route"
 import { buildSteps } from "../lib/steps"
 import {
   dueCards,
@@ -30,22 +32,21 @@ const DIFFICULTIES: Array<{ id: Difficulty; label: string; hint: string }> = [
 ]
 
 type Props = {
-  onStartLesson: (lessonId: string) => void
-  onStartReview: () => void
+  route: Extract<Route, { name: "home" | "section" | "lookup" | "lyrics" }>
 }
 
-export function Home({ onStartLesson, onStartReview }: Props) {
+export function Home({ route }: Props) {
   const [store, setStore] = useState<Store>(() => loadStore())
-  const [sectionId, setSectionId] = useState<string | null>(null)
-  const [band, setBand] = useState<number | null>(null)
-  const [folder, setFolder] = useState<null | "themes">(null)
-  const [themeId, setThemeId] = useState<string | null>(null)
-  const [tool, setTool] = useState<null | "lookup" | "lyrics">(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const sectionId = route.name === "section" ? route.sectionId : null
+  const band = route.name === "section" ? route.band : null
+  const folder = route.name === "section" ? route.folder : null
+  const themeId = route.name === "section" ? route.themeId : null
+  const tool = route.name === "lookup" ? "lookup" : route.name === "lyrics" ? "lyrics" : null
   const due = dueCards(store)
   const difficulty = store.settings.difficulty
   const section = sections.find((item) => item.id === sectionId)
-  const bandSize = 25
+  const bandSize = COMMON_BAND_SIZE
   const bands =
     section?.id === "common"
       ? Array.from({ length: Math.ceil(section.lessons.length / bandSize) }, (_, index) =>
@@ -73,38 +74,45 @@ export function Home({ onStartLesson, onStartReview }: Props) {
         ? "每课 20 个词。"
         : section?.blurb
 
-  function openSection(id: string) {
-    setTool(null)
+  useEffect(() => {
     setSettingsOpen(false)
-    setBand(null)
-    setFolder(null)
-    setThemeId(null)
-    setSectionId(id)
+  }, [route])
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!isEscape(event)) return
+      if (!store.seenIntro) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        return
+      }
+      if (settingsOpen) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setSettingsOpen(false)
+        return
+      }
+      if (route.name === "home" || route.name === "lyrics") return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      back(parentOf(route))
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [route, settingsOpen, store.seenIntro])
+
+  function openSection(id: string) {
+    setSettingsOpen(false)
+    go({ name: "section", sectionId: id, band: null, folder: null, themeId: null })
   }
 
   function openLookup() {
-    setSectionId(null)
     setSettingsOpen(false)
-    setBand(null)
-    setFolder(null)
-    setThemeId(null)
-    setTool("lookup")
+    go({ name: "lookup" })
   }
 
   function goBack() {
-    if (themeId) {
-      setThemeId(null)
-      return
-    }
-    if (folder) {
-      setFolder(null)
-      return
-    }
-    if (band !== null) {
-      setBand(null)
-      return
-    }
-    setSectionId(null)
+    back(parentOf(route))
   }
 
   function commit(next: Store) {
@@ -131,7 +139,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
           >
             设置
           </button>
-          <button className="pill" type="button" onClick={onStartReview}>
+          <button className="pill" type="button" onClick={() => go({ name: "review" })}>
             今日复习
             <b>{due.length}</b>
           </button>
@@ -216,10 +224,10 @@ export function Home({ onStartLesson, onStartReview }: Props) {
       )}
 
       <section className="lessons">
-        {tool === "lyrics" ? (
-          <ListeningReading onBack={() => setTool(null)} onReview={onStartReview} />
+        {route.name === "lyrics" ? (
+          <ListeningReading route={route} />
         ) : tool === "lookup" ? (
-          <Lookup onBack={() => setTool(null)} />
+          <Lookup onBack={() => back({ name: "home" })} />
         ) : section ? (
           <>
             <button type="button" className="back" onClick={goBack}>
@@ -236,7 +244,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
                 const steps = buildSteps(lesson, difficulty).length
                 return (
                   <li key={lesson.id}>
-                    <button type="button" onClick={() => onStartLesson(lesson.id)}>
+                    <button type="button" onClick={() => go({ name: "practice", mode: "lesson", lessonId: lesson.id })}>
                       <span className="num">{String(index + 1).padStart(2, "0")}</span>
                       <span>
                         <strong>{lesson.title}</strong>
@@ -262,7 +270,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
                           key={item.id}
                           type="button"
                           className="section-card"
-                          onClick={() => setThemeId(item.id)}
+                          onClick={() => go({ name: "section", sectionId: "common", band: null, folder: "themes", themeId: item.id })}
                         >
                           <strong>{item.title}</strong>
                           <em>{item.blurb}</em>
@@ -277,7 +285,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
                       <button
                         type="button"
                         className="section-card"
-                        onClick={() => setFolder("themes")}
+                        onClick={() => go({ name: "section", sectionId: "common", band: null, folder: "themes", themeId: null })}
                       >
                         <strong>分类词汇</strong>
                         <em>按饮食、身体、家人这些题目再看一遍。</em>
@@ -290,7 +298,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
                       key={rangeTitle(lessons)}
                       type="button"
                       className="section-card"
-                      onClick={() => setBand(index)}
+                      onClick={() => go({ name: "section", sectionId: "common", band: index, folder: null, themeId: null })}
                     >
                       <strong>{rangeTitle(lessons)}</strong>
                       <em>
@@ -346,7 +354,7 @@ export function Home({ onStartLesson, onStartReview }: Props) {
           </div>
           <button type="button" className="lookup-plate listening-plate" onClick={() => {
             setSettingsOpen(false)
-            setTool("lyrics")
+            go({ name: "lyrics", query: "", songId: null, drill: null, done: false })
           }}>
             <span>
               <span className="plate-label">LISTEN & READ / 01</span>

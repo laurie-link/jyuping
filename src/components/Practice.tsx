@@ -15,6 +15,7 @@ import {
   saveStore,
   touchStreak,
 } from "../lib/storage"
+import { isEscape } from "../lib/route"
 import { toneLabel, toneNumber } from "../lib/tones"
 import type { CardSeed, GradeName, Lesson, Step, SummaryData } from "../lib/types"
 
@@ -416,6 +417,7 @@ export function Practice({
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === ";" && (event.ctrlKey || event.metaKey)) {
+        if (lineByLine) return
         event.preventDefault()
         finish("miss")
       } else if ((event.key === "'" || event.key === "Quote") && (event.ctrlKey || event.metaKey)) {
@@ -428,6 +430,11 @@ export function Practice({
         if (event.target instanceof HTMLInputElement) return
         event.preventDefault()
         confirmRetype()
+      } else if (isEscape(event) && !event.defaultPrevented && !composingRef.current) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        if (step) leave()
+        else onExit()
       }
     }
     window.addEventListener("keydown", onKey)
@@ -684,7 +691,7 @@ export function Practice({
               <kbd>→</kbd>
               换格
             </span>
-            {phase === "typing" && (
+            {phase === "typing" && !lineByLine && (
               <button type="button" onClick={() => finish("miss")}>
                 <kbd>Ctrl</kbd>
                 <kbd>;</kbd>
@@ -698,6 +705,10 @@ export function Practice({
             {index + 1 >= steps.length ? "看结果" : "下一题"}
           </button>
         )}
+        <span>
+          <kbd>Esc</kbd>
+          返回
+        </span>
       </footer>
     </div>
   )
