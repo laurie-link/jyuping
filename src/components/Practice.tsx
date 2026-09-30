@@ -118,6 +118,7 @@ export function Practice({
   const handledKeyRef = useRef(false)
   const ignoreCompositionRef = useRef(false)
   const spaceGuardRef = useRef(false)
+  const carryRef = useRef("")
   const releaseTimerRef = useRef(0)
   const lastReleaseAtRef = useRef(0)
   const step = steps[index]
@@ -239,14 +240,31 @@ export function Practice({
 
   function writeSlots(next: string[], activeIndex = activeRef.current) {
     const i = next.length === 0 ? 0 : Math.max(0, Math.min(activeIndex, next.length - 1))
+    const switching = i !== activeRef.current
+    if (switching) carryRef.current = (slotsRef.current[activeRef.current] ?? "").toLowerCase().replace(/[^a-z1-6]/g, "")
     slotsRef.current = next
     activeRef.current = i
     setSlots(next)
     setActive(i)
     const field = inputRef.current
     const value = next[i] ?? ""
-    if (field && !composingRef.current) {
-      if (field.value !== value) field.value = value
+    if (!field) return
+    if (switching) {
+      // End any phone composition before the old text is written into the new slot.
+      cancelRelease()
+      ignoreCompositionRef.current = true
+      composingRef.current = false
+      field.blur()
+      field.value = value
+      field.focus()
+      field.setSelectionRange(value.length, value.length)
+      window.setTimeout(() => {
+        ignoreCompositionRef.current = false
+      }, 80)
+      return
+    }
+    if (!composingRef.current && field.value !== value) {
+      field.value = value
       field.setSelectionRange(value.length, value.length)
     }
   }
@@ -286,6 +304,19 @@ export function Practice({
   function onSlotValue(value: string) {
     if ((phaseRef.current !== "typing" && phaseRef.current !== "retype") || !step) return
     const incoming = value.toLowerCase().replace(/[^a-z1-6]/g, "")
+    const carry = carryRef.current
+    const current = (slotsRef.current[activeRef.current] ?? "").toLowerCase().replace(/[^a-z1-6]/g, "")
+    if (carry) {
+      const singleEdit =
+        (incoming.length === current.length + 1 && incoming.startsWith(current)) ||
+        (current.length === incoming.length + 1 && current.startsWith(incoming))
+      if (singleEdit) carryRef.current = ""
+      else if (incoming === carry && incoming !== current) {
+        const field = inputRef.current
+        if (field && field.value !== current) field.value = current
+        return
+      } else if (incoming !== carry) carryRef.current = ""
+    }
     const list = slotsRef.current.slice()
     const indexInSlots = activeRef.current
     const previous = list[indexInSlots] ?? ""
@@ -609,14 +640,19 @@ export function Practice({
         {(phase === "typing" || phase === "retype") && (
           <div
             className={shake ? "slots shake" : "slots"}
-            onClick={(event) => {
-              inputRef.current?.focus()
+            onPointerDown={(event) => {
+              if (event.pointerType === "mouse" && event.button !== 0) return
               const nodes = event.currentTarget.querySelectorAll(".slot")
               let picked = activeRef.current
               nodes.forEach((node, slotIndex) => {
                 const rect = node.getBoundingClientRect()
                 if (event.clientX >= rect.left && event.clientX <= rect.right) picked = slotIndex
               })
+              if (picked === activeRef.current) {
+                inputRef.current?.focus()
+                return
+              }
+              event.preventDefault()
               moveToSlot(picked)
             }}
           >

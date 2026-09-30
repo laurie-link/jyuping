@@ -68,9 +68,9 @@ function SummaryRoute() {
 function SignedInApp() {
   const route = useRoute()
   const syncStatus = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus)
-  const syncNotice = syncStatus === "saved" ? null : (
+  const syncNotice = syncStatus === "saved" || syncStatus === "saving" ? null : (
     <div className="sync-notice" role="status">
-      <span>{syncStatus === "saving" ? "正在保存进度到服务器…" : syncStatus === "conflict" ? "发现另一份进度，请选择保留哪份" : "进度尚未保存到服务器，请检查网络"}</span>
+      <span>{syncStatus === "conflict" ? "发现另一份进度，请选择保留哪份" : "进度尚未保存到服务器，请检查网络"}</span>
       {syncStatus === "error" && <button type="button" onClick={retrySync}>重试</button>}
       {syncStatus === "conflict" && <>
         <button type="button" onClick={() => { void resolveConflict(false) }}>服务器进度</button>
@@ -98,7 +98,7 @@ function SignedInApp() {
 
 export default function App() {
   const { ready, session } = useAuthState()
-  if (!ready) return <div className="home"><p className="lede">正在读取服务器进度…</p></div>
+  if (!ready) return null
   if (!session) return <AuthScreen />
   return <SignedInApp key={session.id} />
 }
